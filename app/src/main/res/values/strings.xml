@@ -1,4 +1,134 @@
 <resources>
-    <string name="app_name">Proyecto_01_11_25</string>
+    <string name="app_name">Habitus+</string>
     <string name="Api_Key">AIzaSyDiHCfCjzf-C8A8ZaYPknAQEoJ_WYTxhhk</string>
+    
+    <!-- Dashboard -->
+    <string name="title_todays_habits">Today\'s Habits</string>
+    <string name="action_settings">Configuración</string>
+    <string name="add_habit">Agregar</string>
+    <string name="add_new_habit">Agregar nuevo hábito</string>
+    <string name="view_map">Ver mapa de logros</string>
+    <string name="open_camera">Abrir cámara para leer</string>
+    
+    <!-- Create Habit -->
+    <string name="create_habit_title">Crear Nuevo Hábito</string>
+    <string name="edit_habit_title">Editar Hábito</string>
+    <string name="habit_name_hint">Nombre del hábito</string>
+    <string name="habit_goal_hint">Meta del hábito</string>
+    <string name="habit_category_hint">Categoría (ej: salud, educación, general)</string>
+    <string name="habit_type_label">Tipo de Hábito</string>
+    <string name="habit_type_exercise">Ejercicio (Acelerómetro)</string>
+    <string name="habit_type_walk">Caminar (GPS)</string>
+    <string name="habit_type_read">Leer (Cámara + ML)</string>
+    <string name="habit_type_demo">Manual (Tocar para completar)</string>
+    <string name="target_value_hint">Valor objetivo (ej: 5 km, 30 min)</string>
+    <string name="target_value_km_hint">Kilómetros objetivo (ej: 5)</string>
+    <string name="target_value_min_hint">Minutos objetivo (ej: 30)</string>
+    <string name="habit_points_hint">Puntos (default: 10)</string>
+    <string name="save_habit">Guardar Hábito</string>
+    <string name="update_habit">Actualizar Hábito</string>
+    
+    <!-- Settings -->
+    <string name="settings_title">Configuración</string>
+    <string name="theme_section">Modo de Tema</string>
+    <string name="dark_mode">Modo Dark</string>
+    <string name="dark_mode_desc">Activa el modo oscuro manualmente</string>
+    <string name="dark_mode_sensors">Modo Dark con Sensores</string>
+    <string name="dark_mode_sensors_desc">El modo oscuro se activa automáticamente con el sensor de luz</string>
+    <string name="focus_mode">Modo Foco</string>
+    <string name="focus_mode_desc">Activa el modo foco (tema azul) manualmente</string>
+    <string name="focus_mode_sensors">Modo Foco con Sensores</string>
+    <string name="focus_mode_sensors_desc">El modo foco se activa automáticamente con 3 giros del dispositivo</string>
+    
+    <!-- Scores -->
+    <string name="scores_title">Puntajes</string>
+    <string name="total_score">Puntaje Total</string>
+    
+    <!-- Camera -->
+    <string name="camera_hint">Enfoca texto legible para completar el hábito 📖</string>
+    <string name="text_detected">Texto detectado ✅</string>
+    
+    <!-- Splash -->
+    <string name="app_logo">HABITUS+</string>
+    
+    <!-- Common -->
+    <string name="edit">Editar</string>
+    <string name="delete">Eliminar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="confirm">Confirmar</string>
+    <string name="delete_habit_confirm">¿Estás seguro de que quieres eliminar \"%1$s\"?</string>
+    <string name="delete_habit_title">Eliminar Hábito</string>
+    <string name="habit_deleted">✅ Hábito eliminado</string>
+    <string name="error_deleting_habit">❌ Error al eliminar el hábito</string>
+    
+    <!-- Habit Card -->
+    <string name="habit_completed">Completado</string>
+    <string name="habit_pending">Pendiente</string>
+    
+    <!-- Select Habit Type -->
+    <string name="select_habit_type">Selecciona el tipo de hábito</string>
+    <string name="back">Volver</string>
+    
+    <!-- New Habit Types -->
+    <string name="habit_type_read_book">Leer</string>
+    <string name="habit_type_vitamins">Tomar vitaminas</string>
+    <string name="habit_type_meditate">Meditar</string>
+    <string name="habit_type_journaling">Journaling</string>
+    <string name="habit_type_gym">Ir al gym</string>
+    <string name="habit_type_water">Beber agua</string>
+    <string name="habit_type_cold_shower">Ducha fría</string>
+    <string name="habit_type_english">Practicar inglés</string>
+    <string name="habit_type_coding">Practicar coding</string>
+    
+    <!-- Configure Habit - Read Book -->
+    <string name="configure_read_book_title">Configurar: Leer</string>
+    <string name="pages_per_day_hint">Páginas por día</string>
+    <string name="book_name_hint">Nombre del libro (opcional)</string>
+    <string name="detect_pages_camera">Detectar páginas con cámara</string>
+    
+    <!-- Configure Habit - Vitamins -->
+    <string name="configure_vitamins_title">Configurar: Tomar vitaminas</string>
+    <string name="reminder_times_label">Horarios de recordatorio</string>
+    <string name="daily_repetition">Repetición diaria</string>
+    
+    <!-- Configure Habit - Meditate -->
+    <string name="configure_meditate_title">Configurar: Meditar</string>
+    <string name="duration_label">Duración</string>
+    <string name="dnd_mode_label">Activar modo No Molestar</string>
+    <string name="music_label">Música predeterminada</string>
+    
+    <!-- Configure Habit - Journaling -->
+    <string name="configure_journaling_title">Configurar: Journaling</string>
+    <string name="journal_question">¿Cómo estuvo tu día hoy?</string>
+    
+    <!-- Configure Habit - Gym -->
+    <string name="configure_gym_title">Configurar: Ir al gym</string>
+    <string name="gym_days_label">Días de la semana</string>
+    
+    <!-- Configure Habit - Water -->
+    <string name="configure_water_title">Configurar: Beber agua</string>
+    <string name="water_glasses_hint">Cantidad de vasos al día</string>
+    
+    <!-- Configure Habit - Cold Shower -->
+    <string name="configure_cold_shower_title">Configurar: Ducha fría</string>
+    <string name="one_click_complete_desc">Este hábito se completa con un solo toque</string>
+    
+    <!-- Configure Habit - English -->
+    <string name="configure_english_title">Configurar: Practicar inglés</string>
+    
+    <!-- Configure Habit - Coding -->
+    <string name="configure_coding_title">Configurar: Practicar coding</string>
+    
+    <!-- Common Configuration -->
+    <string name="habit_name_label">Nombre del hábito</string>
+    <string name="save_configuration">Guardar</string>
+    <string name="invalid_pages_per_day">Por favor, ingresa un número válido de páginas</string>
+    <string name="invalid_water_glasses">Por favor, ingresa un número válido de vasos</string>
+    <string name="habit_name_required">El nombre del hábito es obligatorio</string>
+    <string name="habit_saved_toast">✅ Hábito guardado correctamente</string>
+    <string name="habit_save_error_toast">❌ Error al guardar el hábito</string>
+    <string name="habit_updated_toast">✅ Hábito actualizado correctamente</string>
+    <string name="habit_update_error_toast">❌ Error al actualizar el hábito</string>
+    <string name="select_habit_icon">Elegir ícono para mostrar en el mapa</string>
+    <string name="icon_selection">Seleccionar ícono</string>
 </resources>

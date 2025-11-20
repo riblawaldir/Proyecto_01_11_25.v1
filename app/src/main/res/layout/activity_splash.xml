@@ -8,10 +8,10 @@
         android:id="@+id/txtLogo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="HABITUS+"
-        android:textSize="38sp"
+        android:text="@string/app_logo"
+        android:textSize="@dimen/text_size_title"
         android:textStyle="bold"
-        android:textColor="#FFFFFF"
+        android:textColor="@android:color/white"
         android:fontFamily="sans-serif-black"
         android:layout_centerInParent="true" />
 </RelativeLayout>

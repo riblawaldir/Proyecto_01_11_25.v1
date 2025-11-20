@@ -1,103 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?android:attr/windowBackground">
 
-    <!-- Bottom Navigation se crea programáticamente -->
-    <FrameLayout
-        android:id="@+id/bottomNavContainer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true" />
-
-    <!-- Título con botón de configuración -->
-    <RelativeLayout
+    <!-- Header con título y botón de configuración -->
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/headerLayout"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="16dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginBottom="12dp">
+        android:layout_marginStart="@dimen/margin_medium"
+        android:layout_marginTop="@dimen/margin_large"
+        android:layout_marginEnd="@dimen/margin_medium"
+        android:layout_marginBottom="@dimen/margin_small"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
             android:id="@+id/txtTitle"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Today's Habits"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:textColor="?android:attr/textColorPrimary"
-            android:layout_alignParentStart="true"
-            android:layout_centerVertical="true" />
+            android:text="@string/title_todays_habits"
+            style="@style/TextStyleTitle"
+            android:textSize="@dimen/text_size_xxlarge"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btnSettings" />
 
         <ImageButton
             android:id="@+id/btnSettings"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"
-            android:layout_marginEnd="8dp"
+            android:layout_width="@dimen/icon_size_large"
+            android:layout_height="@dimen/icon_size_large"
             android:src="@drawable/ic_settings_24"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Configuración"
-            android:tint="@color/textDark"
+            android:contentDescription="@string/action_settings"
+            android:tint="?android:attr/textColorPrimary"
             android:scaleType="fitCenter"
-            android:padding="8dp" />
-    </RelativeLayout>
+            android:padding="@dimen/padding_small"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- Lista de hábitos -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvHabits"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/headerLayout"
-        android:layout_marginTop="12dp"
-        android:layout_above="@id/bottomNavContainer"
-        android:layout_marginBottom="8dp"
-        android:padding="12dp" />
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:padding="@dimen/padding_medium"
+        android:clipToPadding="false"
+        android:scrollbars="vertical"
+        app:layout_constraintTop_toBottomOf="@id/headerLayout"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Botón CÁMARA (encima del botón mapa) -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/btnCamera"
+    <!-- Bottom Navigation Container -->
+    <FrameLayout
+        android:id="@+id/bottomNavContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- FABs en columna -->
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+        android:id="@+id/fabAddHabit"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_above="@id/btnMap"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="20dp"
-        android:src="@drawable/ic_camera_24"
+        android:layout_marginEnd="@dimen/fab_margin"
+        android:layout_marginBottom="@dimen/fab_margin"
+        android:src="@android:drawable/ic_input_add"
+        android:text="@string/add_habit"
+        app:icon="@android:drawable/ic_input_add"
+        app:backgroundTint="@color/orange"
         app:tint="@android:color/white"
-        app:backgroundTint="#FF9800"
-        android:contentDescription="Abrir cámara para leer" />
+        app:contentDescription="@string/add_new_habit"
+        app:layout_constraintBottom_toTopOf="@id/btnMap"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Botón MAPA (encima del botón agregar hábito) -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnMap"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_above="@id/fabAddHabit"
-        android:layout_marginEnd="20dp"
-        android:layout_marginBottom="20dp"
+        android:layout_marginEnd="@dimen/fab_margin"
+        android:layout_marginBottom="@dimen/fab_margin"
         android:src="@drawable/ic_map"
-        app:tint="@android:color/white"
         app:backgroundTint="@color/teal_700"
-        android:contentDescription="Ver mapa de logros" />
+        app:tint="@android:color/white"
+        app:contentDescription="@string/view_map"
+        app:layout_constraintBottom_toTopOf="@id/btnCamera"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <!-- Botón AGREGAR HÁBITO -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabAddHabit"
+        android:id="@+id/btnCamera"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="20dp"
-        android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="#FF5200"
+        android:layout_marginEnd="@dimen/fab_margin"
+        android:layout_marginBottom="@dimen/fab_margin"
+        android:src="@drawable/ic_camera_24"
+        app:backgroundTint="#FF9800"
         app:tint="@android:color/white"
-        android:contentDescription="Agregar nuevo hábito" />
+        app:contentDescription="@string/open_camera"
+        app:layout_constraintBottom_toTopOf="@id/bottomNavContainer"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-</RelativeLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -8,14 +8,12 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class HabitEventStore {
     private static final String PREFS_NAME = "HabitEventStore";
     private static final String KEY_EVENTS = "habit_events";
     private static final List<HabitEvent> events = new ArrayList<>();
-    private static Context context;
     private static SharedPreferences prefs;
 
     /**
@@ -23,8 +21,9 @@ public class HabitEventStore {
      * Debe llamarse en onCreate de la actividad principal
      */
     public static void init(Context ctx) {
-        context = ctx.getApplicationContext();
-        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        // Usar ApplicationContext para evitar memory leak
+        Context appContext = ctx.getApplicationContext();
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         loadEvents();
     }
 

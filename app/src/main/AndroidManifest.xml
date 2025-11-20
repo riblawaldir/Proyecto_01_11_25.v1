@@ -33,8 +33,11 @@
 
 
         <activity android:name=".ui.DashboardActivity" />
-        <activity android:name=".ui.CreateHabitActivity" />
-        <activity android:name=".ui.CreateHabitNewActivity" />
+        <activity android:name=".ui.SelectHabitTypeActivity" />
+        <activity android:name=".ui.ConfigureHabitActivity" />
+        <activity android:name=".ui.HabitDetailActivity" />
+        <activity android:name=".ui.JournalingActivity" />
+        <activity android:name=".ui.MeditationActivity" />
         <activity android:name=".ui.MapActivity"/>
         <activity android:name=".ui.SettingsActivity" />
         <activity android:name=".ui.ScoresActivity" />

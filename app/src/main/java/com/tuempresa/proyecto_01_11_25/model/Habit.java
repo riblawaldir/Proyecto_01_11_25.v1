@@ -9,7 +9,17 @@ public class Habit {
         EXERCISE,   // acelerómetro
         WALK,       // distancia
         DEMO,       // botón
-        READ        // cámara + ML Kit
+        READ,       // cámara + ML Kit
+        // Nuevos tipos
+        READ_BOOK,      // Leer X páginas al día
+        VITAMINS,       // Tomar vitaminas
+        MEDITATE,       // Meditar
+        JOURNALING,     // Journaling
+        GYM,            // Ir al gym
+        WATER,          // Beber agua
+        COLD_SHOWER,    // Ducha fría
+        ENGLISH,        // Practicar inglés
+        CODING          // Practicar coding
     }
 
     private long id = -1;
@@ -20,6 +30,20 @@ public class Habit {
     private boolean completed;
     private double targetValue = 0.0;
     private String targetUnit = null;
+    
+    // Nuevos campos por tipo de hábito
+    private Integer pagesPerDay = null;
+    private String reminderTimes = null; // JSON string
+    private Integer durationMinutes = null;
+    private Boolean dndMode = null;
+    private Integer musicId = null;
+    private Boolean journalEnabled = null;
+    private String gymDays = null; // JSON string
+    private Integer waterGoalGlasses = null;
+    private Boolean oneClickComplete = null;
+    private Boolean englishMode = null;
+    private Boolean codingMode = null;
+    private String habitIcon = null; // Nombre del ícono personalizado (ej: "ic_habit_book", "ic_habit_vitamins")
 
     public Habit(String title, String goal, String category, HabitType type) {
         this.title = title;
@@ -45,6 +69,43 @@ public class Habit {
     public void setTargetValue(double targetValue) { this.targetValue = targetValue; }
     public String getTargetUnit() { return targetUnit; }
     public void setTargetUnit(String targetUnit) { this.targetUnit = targetUnit; }
+    
+    // Getters y Setters para nuevos campos
+    public Integer getPagesPerDay() { return pagesPerDay; }
+    public void setPagesPerDay(Integer pagesPerDay) { this.pagesPerDay = pagesPerDay; }
+    
+    public String getReminderTimes() { return reminderTimes; }
+    public void setReminderTimes(String reminderTimes) { this.reminderTimes = reminderTimes; }
+    
+    public Integer getDurationMinutes() { return durationMinutes; }
+    public void setDurationMinutes(Integer durationMinutes) { this.durationMinutes = durationMinutes; }
+    
+    public Boolean getDndMode() { return dndMode; }
+    public void setDndMode(Boolean dndMode) { this.dndMode = dndMode; }
+    
+    public Integer getMusicId() { return musicId; }
+    public void setMusicId(Integer musicId) { this.musicId = musicId; }
+    
+    public Boolean getJournalEnabled() { return journalEnabled; }
+    public void setJournalEnabled(Boolean journalEnabled) { this.journalEnabled = journalEnabled; }
+    
+    public String getGymDays() { return gymDays; }
+    public void setGymDays(String gymDays) { this.gymDays = gymDays; }
+    
+    public Integer getWaterGoalGlasses() { return waterGoalGlasses; }
+    public void setWaterGoalGlasses(Integer waterGoalGlasses) { this.waterGoalGlasses = waterGoalGlasses; }
+    
+    public Boolean getOneClickComplete() { return oneClickComplete; }
+    public void setOneClickComplete(Boolean oneClickComplete) { this.oneClickComplete = oneClickComplete; }
+    
+    public Boolean getEnglishMode() { return englishMode; }
+    public void setEnglishMode(Boolean englishMode) { this.englishMode = englishMode; }
+    
+    public Boolean getCodingMode() { return codingMode; }
+    public void setCodingMode(Boolean codingMode) { this.codingMode = codingMode; }
+    
+    public String getHabitIcon() { return habitIcon; }
+    public void setHabitIcon(String habitIcon) { this.habitIcon = habitIcon; }
 
     /** 4 hábitos por defecto al abrir la app */
     public static List<Habit> defaultHabits() {

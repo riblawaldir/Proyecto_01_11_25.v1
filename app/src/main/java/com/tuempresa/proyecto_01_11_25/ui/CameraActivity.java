@@ -1,13 +1,16 @@
 package com.tuempresa.proyecto_01_11_25.ui;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.media.Image;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,7 +30,12 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import com.tuempresa.proyecto_01_11_25.R;
+import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
+import com.tuempresa.proyecto_01_11_25.model.Habit;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,6 +56,15 @@ public class CameraActivity extends AppCompatActivity {
 
     private boolean isProcessingFrame = false;
     private boolean hasCompleted = false;
+    private long habitId = -1;
+    private String habitType = null;
+    private HabitDatabaseHelper dbHelper;
+    private SharedPreferences progressPrefs;
+    
+    // Control de debounce para evitar duplicación
+    private long lastDetectionTime = 0;
+    private static final long DETECTION_DEBOUNCE_MS = 300; // 300ms debounce
+    private boolean pageAlreadyAdded = false; // Flag para evitar doble incremento
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +74,20 @@ public class CameraActivity extends AppCompatActivity {
         previewView = findViewById(R.id.cameraPreview);
         hintView = findViewById(R.id.txtHint);
         progressBar = findViewById(R.id.progressDetection);
+
+        // Obtener información del hábito si viene de HabitDetailActivity
+        habitId = getIntent().getLongExtra("habit_id", -1);
+        habitType = getIntent().getStringExtra("habit_type");
+        
+        if (habitId > 0) {
+            dbHelper = new HabitDatabaseHelper(this);
+            progressPrefs = getSharedPreferences("habit_progress", Context.MODE_PRIVATE);
+            
+            // Actualizar hint para lectura de páginas
+            if ("READ_BOOK".equals(habitType)) {
+                hintView.setText("Enfoca una página de tu libro para detectarla 📖");
+            }
+        }
 
         cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -113,12 +144,21 @@ public class CameraActivity extends AppCompatActivity {
     }
 
     private void analyzeImage(ImageProxy imageProxy) {
-        if (hasCompleted) {
+        // Si ya se completó y se agregó la página, ignorar todos los frames siguientes
+        if (hasCompleted && pageAlreadyAdded) {
             imageProxy.close();
             return;
         }
 
+        // Bloquear si ya se está procesando un frame
         if (isProcessingFrame) {
+            imageProxy.close();
+            return;
+        }
+
+        // Debounce: evitar procesar frames muy seguidos
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastDetectionTime < DETECTION_DEBOUNCE_MS) {
             imageProxy.close();
             return;
         }
@@ -130,6 +170,8 @@ public class CameraActivity extends AppCompatActivity {
         }
 
         isProcessingFrame = true;
+        lastDetectionTime = currentTime;
+        
         InputImage inputImage = InputImage.fromMediaImage(
                 mediaImage,
                 imageProxy.getImageInfo().getRotationDegrees()
@@ -138,9 +180,13 @@ public class CameraActivity extends AppCompatActivity {
         Task<Text> task = recognizer.process(inputImage)
                 .addOnSuccessListener(text -> {
                     String detected = text.getText();
-                    if (!hasCompleted && detected != null && detected.trim().length() >= 6) {
-                        // Consideramos texto válido cuando detectamos al menos 6 caracteres
-                        onTextDetected(detected);
+                    // Validar que el texto tenga suficiente contenido y no se haya procesado ya
+                    if (!hasCompleted && !pageAlreadyAdded && detected != null && detected.trim().length() >= 6) {
+                        // Filtrar texto: considerar solo si tiene al menos 6 caracteres y no es solo números/símbolos
+                        String cleanText = detected.trim();
+                        if (isValidPageText(cleanText)) {
+                            onTextDetected(cleanText);
+                        }
                     }
                 })
                 .addOnFailureListener(e ->
@@ -150,21 +196,72 @@ public class CameraActivity extends AppCompatActivity {
                     imageProxy.close();
                 });
     }
+    
+    /**
+     * Valida si el texto detectado es válido para contar como página
+     * Filtra texto que sea solo números, símbolos o muy corto
+     */
+    private boolean isValidPageText(String text) {
+        if (text == null || text.length() < 6) {
+            return false;
+        }
+        
+        // Contar letras vs números/símbolos
+        int letterCount = 0;
+        for (char c : text.toCharArray()) {
+            if (Character.isLetter(c)) {
+                letterCount++;
+            }
+        }
+        
+        // Debe tener al menos 3 letras para ser considerado texto de página válido
+        return letterCount >= 3;
+    }
 
     private void onTextDetected(String rawText) {
+        // Bloquear múltiples llamadas - solo procesar una vez
+        if (hasCompleted || pageAlreadyAdded) {
+            return;
+        }
+        
         hasCompleted = true;
+        pageAlreadyAdded = true; // Marcar que ya se agregó la página ANTES de procesar
+        
         runOnUiThread(() -> {
-            hintView.setText("Texto detectado ✅");
+            hintView.setText(getString(R.string.text_detected));
             progressBar.setVisibility(View.VISIBLE);
         });
+
+        // Si es para READ_BOOK, agregar página al progreso (SOLO UNA VEZ)
+        if (habitId > 0 && "READ_BOOK".equals(habitType) && dbHelper != null) {
+            Habit habit = dbHelper.getHabitById(habitId);
+            if (habit != null) {
+                String todayKey = "read_" + habitId + "_" + getTodayKey();
+                int currentPages = progressPrefs.getInt(todayKey, 0);
+                progressPrefs.edit().putInt(todayKey, currentPages + 1).apply();
+                
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "✅ Página detectada! (+1 página)", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }
 
         // Pequeño delay para mostrar feedback antes de cerrar
         previewView.postDelayed(() -> {
             Intent data = new Intent();
-            data.putExtra("habit_completed", "READ");
+            if (habitId > 0) {
+                data.putExtra("habit_id", habitId);
+                data.putExtra("pages_added", 1);
+            } else {
+                data.putExtra("habit_completed", "READ");
+            }
             setResult(RESULT_OK, data);
             finish();
-        }, 600);
+        }, 1000);
+    }
+    
+    private String getTodayKey() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
     }
 
     @Override

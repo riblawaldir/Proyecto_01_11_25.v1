@@ -1,28 +1,24 @@
 package com.tuempresa.proyecto_01_11_25.ui;
 
-import android.Manifest;
-import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ProgressBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
-import com.tuempresa.proyecto_01_11_25.model.HabitEvent;
-import com.tuempresa.proyecto_01_11_25.model.HabitEventStore;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
 
@@ -67,18 +63,46 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
         
         // Mostrar meta con valor objetivo si existe
         String goalText = item.getGoal();
-        if (item.getTargetValue() > 0 && item.getTargetUnit() != null) {
+        
+        // Mostrar progreso específico según el tipo
+        int progressValue = 0;
+        boolean isCompleted = item.isCompleted();
+        
+        if (item.getType() == Habit.HabitType.READ_BOOK && item.getPagesPerDay() != null) {
+            int pagesGoal = item.getPagesPerDay();
+            int pagesRead = getTodayProgress(h.itemView.getContext(), "read_" + item.getId(), 0);
+            progressValue = pagesGoal > 0 ? (pagesRead * 100 / pagesGoal) : 0;
+            if (progressValue > 100) progressValue = 100;
+            goalText = goalText + " (" + pagesRead + "/" + pagesGoal + " páginas)";
+            // Si alcanzó la meta, marcar como completado
+            if (pagesRead >= pagesGoal && !isCompleted) {
+                isCompleted = true;
+            }
+        } else if (item.getType() == Habit.HabitType.WATER && item.getWaterGoalGlasses() != null) {
+            int glassesGoal = item.getWaterGoalGlasses();
+            int glassesDrunk = getTodayProgress(h.itemView.getContext(), "water_" + item.getId(), 0);
+            progressValue = glassesGoal > 0 ? (glassesDrunk * 100 / glassesGoal) : 0;
+            if (progressValue > 100) progressValue = 100;
+            goalText = goalText + " (" + glassesDrunk + "/" + glassesGoal + " vasos)";
+            // Si alcanzó la meta, marcar como completado
+            if (glassesDrunk >= glassesGoal && !isCompleted) {
+                isCompleted = true;
+            }
+        } else if (item.getTargetValue() > 0 && item.getTargetUnit() != null) {
             goalText = goalText + " (" + item.getTargetValue() + " " + item.getTargetUnit() + ")";
+            progressValue = isCompleted ? 100 : 25;
+        } else {
+            progressValue = isCompleted ? 100 : 25;
         }
+        
         h.txtGoal.setText(goalText);
         h.txtType.setText(item.getCategory());
         
         // Configurar progreso y color según estado
-        boolean isCompleted = item.isCompleted();
-        h.progress.setProgress(isCompleted ? 100 : 25);
+        h.progress.setProgress(progressValue);
         
         // Cambiar color de la barra: verde si está completado, naranja si no
-        if (isCompleted) {
+        if (isCompleted || progressValue >= 100) {
             // Barra verde para tareas completadas
             h.progress.setProgressDrawable(
                 ContextCompat.getDrawable(
@@ -120,6 +144,12 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     }
 
     @Override public int getItemCount() { return data.size(); }
+    
+    private int getTodayProgress(Context context, String key, int defaultValue) {
+        SharedPreferences prefs = context.getSharedPreferences("habit_progress", Context.MODE_PRIVATE);
+        String todayKey = key + "_" + new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+        return prefs.getInt(todayKey, defaultValue);
+    }
 
     static class VH extends RecyclerView.ViewHolder {
         TextView txtName, txtGoal, txtType;

@@ -68,6 +68,7 @@ public class DashboardActivity extends AppCompatActivity {
     private long lastLightChange = 0;
     private long activityCreateTime = 0;
     private long lastRecreationTime = 0; // Tiempo de la última recreación
+    private boolean shouldOpenCameraAfterCreation = false; // Flag para abrir cámara después de crear hábito
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -189,15 +190,15 @@ public class DashboardActivity extends AppCompatActivity {
                 ActivityCompat.requestPermissions(this, 
                     new String[]{android.Manifest.permission.CAMERA}, 100);
             } else {
-                startActivityForResult(new Intent(this, CameraActivity.class), 200);
+                openCameraForReading();
             }
         });
 
         // Botón temporal para resetear estado (solo para debugging - remover en producción)
-        FloatingActionButton fabAddHabit = findViewById(R.id.fabAddHabit);
+        com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton fabAddHabit = findViewById(R.id.fabAddHabit);
         if (fabAddHabit != null) {
             fabAddHabit.setOnClickListener(v -> {
-                startActivity(new Intent(this, CreateHabitNewActivity.class));
+                startActivityForResult(new Intent(this, SelectHabitTypeActivity.class), 500);
             });
         }
 
@@ -685,13 +686,73 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
-            String habitType = data.getStringExtra("habit_completed");
-            if ("READ".equals(habitType)) {
-                completeHabitByType(Habit.HabitType.READ);
+            // Cámara desde botón principal (lectura)
+            long habitId = data.getLongExtra("habit_id", -1);
+            if (habitId > 0) {
+                // Página detectada y agregada, actualizar Dashboard
+                refreshHabitsList();
+                
+                // Mostrar Snackbar de confirmación
+                com.google.android.material.snackbar.Snackbar.make(
+                    findViewById(android.R.id.content),
+                    "Página detectada y registrada 📘✔",
+                    com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
+                ).show();
+            } else {
+                // Comportamiento antiguo para READ (sin habit_id)
+                String habitType = data.getStringExtra("habit_completed");
+                if ("READ".equals(habitType)) {
+                    completeHabitByType(Habit.HabitType.READ);
+                }
+            }
+        } else if ((requestCode == 300 || requestCode == 301 || requestCode == 302) && resultCode == RESULT_OK) {
+            // HabitDetailActivity, JournalingActivity o MeditationActivity
+            // Recargar hábitos para actualizar progreso y estado
+            refreshHabitsList();
+        } else if (requestCode == 400 && resultCode == RESULT_OK) {
+            // ConfigureHabitActivity (edición)
+            refreshHabitsList();
+        } else if (requestCode == 500 && resultCode == RESULT_OK) {
+            // SelectHabitTypeActivity -> ConfigureHabitActivity (creación)
+            refreshHabitsList();
+            
+            // Si se creó un hábito de leer desde el diálogo, abrir cámara automáticamente
+            if (shouldOpenCameraAfterCreation) {
+                shouldOpenCameraAfterCreation = false; // Resetear flag
+                // Pequeño delay para que se recargue la lista
+                mainHandler.postDelayed(() -> {
+                    // Buscar el hábito de leer recién creado
+                    habits = dbHelper.getAllHabits();
+                    Habit readingHabit = null;
+                    for (Habit habit : habits) {
+                        if (habit.getType() == Habit.HabitType.READ_BOOK) {
+                            readingHabit = habit;
+                            break;
+                        }
+                    }
+                    
+                    if (readingHabit != null) {
+                        Intent cameraIntent = new Intent(this, CameraActivity.class);
+                        cameraIntent.putExtra("habit_id", readingHabit.getId());
+                        cameraIntent.putExtra("habit_type", "READ_BOOK");
+                        startActivityForResult(cameraIntent, 200);
+                    }
+                }, 500);
             }
         }
-        // Recargar hábitos cuando se vuelve de crear/editar
+        
+        // Recargar hábitos cuando se vuelve de crear/editar (para casos sin resultCode específico)
+        if (dbHelper != null && resultCode == RESULT_OK) {
+            refreshHabitsList();
+        }
+    }
+    
+    /**
+     * Refresca la lista de hábitos y actualiza el adapter
+     */
+    private void refreshHabitsList() {
         if (dbHelper != null) {
             habits = dbHelper.getAllHabits();
             if (adapter != null) {
@@ -820,9 +881,47 @@ public class DashboardActivity extends AppCompatActivity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            startActivityForResult(new Intent(this, CameraActivity.class), 200);
+            openCameraForReading();
         } else if (requestCode == 100) {
             Toast.makeText(this, "Se necesita permiso de cámara para leer", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    /**
+     * Abre la cámara para detectar páginas del hábito de leer
+     * Si no existe un hábito de leer, muestra diálogo para crearlo
+     */
+    private void openCameraForReading() {
+        // Buscar hábito activo de tipo READ_BOOK
+        Habit readingHabit = null;
+        for (Habit habit : habits) {
+            if (habit.getType() == Habit.HabitType.READ_BOOK) {
+                readingHabit = habit;
+                break;
+            }
+        }
+        
+        if (readingHabit != null) {
+            // Existe hábito de leer, abrir cámara directamente
+            Intent cameraIntent = new Intent(this, CameraActivity.class);
+            cameraIntent.putExtra("habit_id", readingHabit.getId());
+            cameraIntent.putExtra("habit_type", "READ_BOOK");
+            startActivityForResult(cameraIntent, 200);
+        } else {
+            // No existe hábito de leer, mostrar diálogo
+            new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Hábito de lectura no encontrado")
+                .setMessage("No tienes un hábito de lectura configurado.\n¿Deseas crearlo ahora?")
+                .setPositiveButton("Crear hábito de leer", (dialog, which) -> {
+                    // Marcar que se debe abrir la cámara después de crear
+                    shouldOpenCameraAfterCreation = true;
+                    // Abrir selector de tipo y luego configuración
+                    Intent intent = new Intent(this, SelectHabitTypeActivity.class);
+                    intent.putExtra("auto_select_type", "READ_BOOK");
+                    startActivityForResult(intent, 500);
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
         }
     }
 
@@ -865,69 +964,70 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
-    /** ✅ Toggle hábito con click - puede marcar/desmarcar */
+    /** ✅ Maneja el click en un hábito según su tipo */
     private void completeDemoHabit(Habit h) {
-        // Si ya está completado, desmarcarlo (toggle)
-        if (h.isCompleted()) {
+        // Si ya está completado, desmarcarlo (toggle) - solo para DEMO
+        if (h.isCompleted() && h.getType() == Habit.HabitType.DEMO) {
             h.setCompleted(false);
-            
-            // Actualizar en base de datos
             dbHelper.updateHabitCompleted(h.getTitle(), false);
-            
-            // Guardar estado inmediatamente
             saveHabitsState();
-            
-            // Actualizar UI
             int position = habits.indexOf(h);
             if (position >= 0) {
                 adapter.notifyItemChanged(position);
             } else {
                 adapter.notifyDataSetChanged();
             }
-            
             Toast.makeText(this, "Hábito desmarcado", Toast.LENGTH_SHORT).show();
-            android.util.Log.d("Dashboard", "Hábito desmarcado: " + h.getTitle());
             return;
         }
 
-        // Si no está completado, solo DEMO puede marcarse manualmente
-        if (h.getType() == Habit.HabitType.DEMO) {
-            h.setCompleted(true);
-            
-            // Actualizar en base de datos
-            dbHelper.updateHabitCompleted(h.getTitle(), true);
-            
-            // Agregar puntos
-            int points = dbHelper.getHabitPoints(h.getTitle());
-            dbHelper.addScore(h.getTitle(), points);
-            
-            // Guardar estado inmediatamente
-            saveHabitsState();
-            
-            addLocationEvent("Demo ✅ Completado", HabitEvent.HabitType.DEMO);
-            // Actualizar solo el item específico para mejor rendimiento
-            int position = habits.indexOf(h);
-            if (position >= 0) {
-                adapter.notifyItemChanged(position);
-            } else {
-            adapter.notifyDataSetChanged();
-            }
-            
-            Toast.makeText(this, "✅ " + h.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this,
-                    "Esto se completa automáticamente con sensores ✅",
-                    Toast.LENGTH_SHORT).show();
+        // Abrir Activity específica según el tipo de hábito
+        switch (h.getType()) {
+            case READ_BOOK:
+            case WATER:
+            case COLD_SHOWER:
+                startActivityForResult(new Intent(this, HabitDetailActivity.class)
+                    .putExtra("habit_id", h.getId()), 300);
+                break;
+            case JOURNALING:
+                startActivityForResult(new Intent(this, JournalingActivity.class)
+                    .putExtra("habit_id", h.getId()), 301);
+                break;
+            case MEDITATE:
+                startActivityForResult(new Intent(this, MeditationActivity.class)
+                    .putExtra("habit_id", h.getId()), 302);
+                break;
+            case DEMO:
+                // Completar DEMO manualmente
+                h.setCompleted(true);
+                dbHelper.updateHabitCompleted(h.getTitle(), true);
+                int points = dbHelper.getHabitPoints(h.getTitle());
+                dbHelper.addScore(h.getTitle(), points);
+                saveHabitsState();
+                addLocationEvent("Demo ✅ Completado", HabitEvent.HabitType.DEMO);
+                int position = habits.indexOf(h);
+                if (position >= 0) {
+                    adapter.notifyItemChanged(position);
+                } else {
+                    adapter.notifyDataSetChanged();
+                }
+                Toast.makeText(this, "✅ " + h.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                break;
+            default:
+                Toast.makeText(this,
+                        "Esto se completa automáticamente con sensores ✅",
+                        Toast.LENGTH_SHORT).show();
+                break;
         }
     }
 
     /**
-     * Edita un hábito existente
+     * Edita un hábito existente - usa ConfigureHabitActivity específica por tipo
      */
     private void editHabit(Habit habit) {
-        Intent intent = new Intent(this, CreateHabitNewActivity.class);
+        Intent intent = new Intent(this, ConfigureHabitActivity.class);
         intent.putExtra("habit_id", habit.getId());
-        startActivity(intent);
+        startActivityForResult(intent, 400);
     }
     
     /**
