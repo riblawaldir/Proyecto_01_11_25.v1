@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="#F0F0F0"
+    app:cardBackgroundColor="@color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_fitness_center_24"
+            android:tint="#FF9800"
+            android:background="@drawable/bg_card_white"
+            android:backgroundTint="#FFF3E0"
+            android:padding="8dp"
+            android:layout_marginEnd="16dp"/>
+        <!-- Nota: Puedes cambiar el icono dinámicamente en el adaptador -->
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/txtHabitTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hábito Completado"
+                android:textStyle="bold"
+                android:textColor="@color/textDark"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/txtScoreDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hoy, 10:30 AM"
+                android:textColor="@color/textLight"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txtScorePoints"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="+10"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/orangeEnd"
+            android:background="@drawable/bg_card_white"
+            app:backgroundTint="#FFF3E0"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="4dp"/>
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

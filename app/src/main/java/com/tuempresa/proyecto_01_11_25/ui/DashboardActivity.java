@@ -33,6 +33,8 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class DashboardActivity extends AppCompatActivity {
 
@@ -61,6 +63,7 @@ public class DashboardActivity extends AppCompatActivity {
     private Handler mainHandler;
     private SharedPreferences prefs;
     private HabitDatabaseHelper dbHelper;
+    private ExecutorService executorService;
 
     private boolean focusMode = false;
     private boolean isNight = false;
@@ -76,6 +79,9 @@ public class DashboardActivity extends AppCompatActivity {
         
         // Inicializar handler PRIMERO para poder usarlo en el cooldown
         mainHandler = new Handler(Looper.getMainLooper());
+        
+        // Inicializar ExecutorService para operaciones en segundo plano
+        executorService = Executors.newSingleThreadExecutor();
         
         // Cargar estado persistente con valores por defecto: modo claro y foco desactivado
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -624,9 +630,19 @@ public class DashboardActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         
+        // Cerrar ExecutorService
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
+        }
+        
         // Limpiar handlers pendientes
         if (mainHandler != null) {
             mainHandler.removeCallbacksAndMessages(null);
+        }
+        
+        // Cerrar ExecutorService
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
         }
         
         // Detener sensores
@@ -750,20 +766,50 @@ public class DashboardActivity extends AppCompatActivity {
     }
     
     /**
-     * Refresca la lista de hábitos y actualiza el adapter
+     * Refresca la lista de hábitos y actualiza el adapter en tiempo real
+     * Usa ExecutorService para cargar datos en segundo plano y actualizar UI en el hilo principal
      */
     private void refreshHabitsList() {
-        if (dbHelper != null) {
-            habits = dbHelper.getAllHabits();
-            if (adapter != null) {
-                adapter.notifyDataSetChanged();
-            }
+        if (dbHelper == null || adapter == null) {
+            return;
         }
+        
+        // Cargar hábitos en segundo plano
+        executorService.execute(() -> {
+            try {
+                // Obtener hábitos desde la base de datos
+                List<Habit> newHabits = dbHelper.getAllHabits();
+                
+                // Actualizar UI en el hilo principal
+                mainHandler.post(() -> {
+                    if (adapter != null) {
+                        habits = newHabits;
+                        adapter.updateHabits(newHabits);
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("Dashboard", "Error al refrescar hábitos", e);
+                // En caso de error, intentar actualizar en el hilo principal
+                mainHandler.post(() -> {
+                    if (dbHelper != null && adapter != null) {
+                        try {
+                            habits = dbHelper.getAllHabits();
+                            adapter.updateHabits(habits);
+                        } catch (Exception ex) {
+                            android.util.Log.e("Dashboard", "Error crítico al refrescar", ex);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        
+        // Refrescar lista cuando se vuelve a la Activity (actualización en tiempo real)
+        refreshHabitsList();
         
         // Verificar cooldown antes de hacer cualquier cambio
         long timeSinceLastRecreation = lastRecreationTime > 0 ? 
@@ -1038,29 +1084,36 @@ public class DashboardActivity extends AppCompatActivity {
             .setTitle("Eliminar Hábito")
             .setMessage("¿Estás seguro de que quieres eliminar \"" + habit.getTitle() + "\"?")
             .setPositiveButton("Eliminar", (dialog, which) -> {
-                long habitId = habit.getId();
-                if (habitId > 0) {
-                    boolean deleted = dbHelper.deleteHabit(habitId);
-                    if (deleted) {
-                        // Remover de la lista local
-                        habits.remove(habit);
-                        adapter.notifyDataSetChanged();
-                        Toast.makeText(this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
+                // Eliminar en segundo plano
+                executorService.execute(() -> {
+                    long habitId = habit.getId();
+                    boolean deleted = false;
+                    
+                    if (habitId > 0) {
+                        deleted = dbHelper.deleteHabit(habitId);
                     } else {
-                        Toast.makeText(this, "❌ Error al eliminar el hábito", Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    // Si no tiene ID, buscar por título
-                    long id = dbHelper.getHabitIdByTitle(habit.getTitle());
-                    if (id > 0) {
-                        boolean deleted = dbHelper.deleteHabit(id);
-                        if (deleted) {
-                            habits.remove(habit);
-                            adapter.notifyDataSetChanged();
-                            Toast.makeText(this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
+                        // Si no tiene ID, buscar por título
+                        long id = dbHelper.getHabitIdByTitle(habit.getTitle());
+                        if (id > 0) {
+                            deleted = dbHelper.deleteHabit(id);
                         }
                     }
-                }
+                    
+                    final boolean finalDeleted = deleted;
+                    // Actualizar UI en el hilo principal
+                    mainHandler.post(() -> {
+                        if (finalDeleted) {
+                            // Remover inmediatamente de la lista visual
+                            if (adapter != null) {
+                                adapter.removeHabit(habit);
+                            }
+                            habits.remove(habit);
+                            Toast.makeText(this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(this, "❌ Error al eliminar el hábito", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                });
             })
             .setNegativeButton("Cancelar", null)
             .show();

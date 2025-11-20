@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/padding_medium">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Metas de Lectura"
+        android:textStyle="bold"
+        android:textColor="@color/textDark"
+        android:layout_marginBottom="16dp"/>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="@color/orangeEnd"
+        app:startIconDrawable="@drawable/ic_menu_book_24"
+        android:hint="@string/pages_per_day_hint">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edtPagesPerDay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:text="10" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="@color/orangeEnd"
+        android:hint="@string/book_name_hint">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edtBookName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="text" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnDetectPages"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="@string/detect_pages_camera"
+        android:textColor="@color/orangeEnd"
+        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+        app:strokeColor="@color/orangeEnd"
+        app:strokeWidth="2dp"
+        app:icon="@drawable/ic_camera_24"
+        app:iconTint="@color/orangeEnd"
+        app:iconGravity="textStart" />
+
+</LinearLayout>

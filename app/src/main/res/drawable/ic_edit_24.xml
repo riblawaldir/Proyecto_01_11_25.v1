@@ -1,0 +1,30 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="960"
+    android:viewportHeight="960">
+
+    <!-- Cuerpo del lápiz -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M200,760
+            L260,760
+            L720,300
+            L660,240
+            L200,700
+            Z" />
+
+
+
+    <!-- Borrador del lápiz -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="
+            M250,772
+            L100,820
+            L260,600
+            L400,520
+            Z" />
+
+</vector>

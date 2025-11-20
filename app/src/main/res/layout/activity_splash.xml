@@ -2,16 +2,66 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/bg_orange_gradient">
+    android:background="@drawable/drawable_gradient_orange">
 
-    <TextView
-        android:id="@+id/txtLogo"
+    <!-- Círculos decorativos de fondo para dar textura -->
+
+    <ImageView
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:src="@drawable/img_logo"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="-50dp"
+        android:layout_marginStart="106dp"
+        android:layout_marginTop="103dp"
+        android:layout_marginEnd="105dp"
+        android:layout_marginBottom="-50dp"
+        android:background="#1AFFFFFF"
+        android:backgroundTint="#FFFFFF"
+        android:backgroundTintMode="src_in"
+        android:shape="oval" />
+
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/app_logo"
-        android:textSize="@dimen/text_size_title"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"
-        android:fontFamily="sans-serif-black"
-        android:layout_centerInParent="true" />
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_centerInParent="true">
+
+        <TextView
+            android:id="@+id/txtLogo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_logo"
+            android:textSize="40sp"
+            android:letterSpacing="0.1"
+            android:textStyle="bold"
+            android:textColor="@android:color/white"
+            android:fontFamily="sans-serif-black"
+            android:shadowColor="#40000000"
+            android:shadowDx="2"
+            android:shadowDy="2"
+            android:shadowRadius="4"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Construye tu mejor versión"
+            android:textColor="#E6FFFFFF"
+            android:textSize="14sp"
+            android:layout_marginTop="8dp"
+            android:letterSpacing="0.05"/>
+    </LinearLayout>
+
+    <ProgressBar
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="64dp"
+        android:indeterminate="true"
+        android:indeterminateTint="@color/white" />
+
 </RelativeLayout>

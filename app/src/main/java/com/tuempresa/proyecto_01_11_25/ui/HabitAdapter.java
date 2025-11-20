@@ -145,6 +145,51 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
 
     @Override public int getItemCount() { return data.size(); }
     
+    /**
+     * Actualiza la lista completa de hábitos
+     */
+    public void updateHabits(List<Habit> newHabits) {
+        this.data.clear();
+        this.data.addAll(newHabits);
+        notifyDataSetChanged();
+    }
+    
+    /**
+     * Elimina un hábito de la lista
+     */
+    public void removeHabit(Habit habit) {
+        int position = data.indexOf(habit);
+        if (position >= 0) {
+            data.remove(position);
+            notifyItemRemoved(position);
+        }
+    }
+    
+    /**
+     * Agrega un hábito a la lista
+     */
+    public void addHabit(Habit habit) {
+        data.add(habit);
+        notifyItemInserted(data.size() - 1);
+    }
+    
+    /**
+     * Actualiza un hábito existente
+     */
+    public void updateHabit(Habit habit) {
+        int position = -1;
+        for (int i = 0; i < data.size(); i++) {
+            if (data.get(i).getId() == habit.getId()) {
+                position = i;
+                break;
+            }
+        }
+        if (position >= 0) {
+            data.set(position, habit);
+            notifyItemChanged(position);
+        }
+    }
+    
     private int getTodayProgress(Context context, String key, int defaultValue) {
         SharedPreferences prefs = context.getSharedPreferences("habit_progress", Context.MODE_PRIVATE);
         String todayKey = key + "_" + new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());

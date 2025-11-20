@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="16dp"
+    android:layout_margin="@dimen/spacing_medium"
+    app:cardBackgroundColor="@color/white">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- Header con icono -->
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:background="#E0E0E0"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp"/>
+
+        <ImageView
+            android:id="@+id/imgHabitIcon"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/drawable_gradient_orange"
+            android:backgroundTint="#20FF8A00"
+            android:padding="16dp"
+            android:src="@drawable/ic_fitness_center_24"
+            app:tint="@color/orangeEnd"
+            android:contentDescription="@string/icon_selection" />
+
+        <TextView
+            android:id="@+id/txtHabitName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/textDark"
+            android:gravity="center"
+            android:text="Nombre Hábito"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/txtDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@color/textLight"
+            android:gravity="center"
+            android:text="Fecha"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/txtDetails"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@color/textLight"
+            android:gravity="center"
+            android:text="Detalles"
+            android:layout_marginBottom="16dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="24dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_map"
+                app:tint="@color/textLight"
+                android:layout_marginEnd="4dp"/>
+
+            <TextView
+                android:id="@+id/txtLocation"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textColor="@color/textLight"
+                android:text="Ubicación desconocida" />
+        </LinearLayout>
+
+        <!-- Botón Ver Hábito -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnViewHabit"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="Ver Detalles"
+            android:background="@drawable/drawable_gradient_orange"
+            app:backgroundTint="@null"
+            android:textColor="@color/white"
+            android:textStyle="bold" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

@@ -45,6 +45,11 @@ public class Habit {
     private Boolean codingMode = null;
     private String habitIcon = null; // Nombre del ícono personalizado (ej: "ic_habit_book", "ic_habit_vitamins")
 
+    // Constructor sin parámetros para Gson
+    public Habit() {
+        this.completed = false;
+    }
+
     public Habit(String title, String goal, String category, HabitType type) {
         this.title = title;
         this.goal = goal;

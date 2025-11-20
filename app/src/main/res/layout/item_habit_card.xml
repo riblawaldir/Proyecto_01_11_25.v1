@@ -3,10 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="@dimen/margin_medium"
-    android:layout_marginEnd="@dimen/margin_medium"
+    android:layout_marginHorizontal="@dimen/margin_medium"
     android:layout_marginBottom="@dimen/margin_medium"
-            style="@style/CardStyleDefault"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="3dp"
+    app:cardBackgroundColor="@color/white"
     android:clickable="true"
     android:focusable="true"
     android:foreground="?attr/selectableItemBackground">
@@ -15,7 +16,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="@dimen/padding_medium">
+        android:padding="16dp">
 
         <!-- Header con nombre y botones de acción -->
         <LinearLayout
@@ -23,6 +24,13 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
+
+            <!-- Icono o indicador visual del tipo (Opcional, pequeño círculo) -->
+            <View
+                android:layout_width="4dp"
+                android:layout_height="32dp"
+                android:background="@drawable/drawable_gradient_orange"
+                android:layout_marginEnd="12dp"/>
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -35,66 +43,79 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Habit Name"
-                    style="@style/TextStyleTitle"
-                    android:textSize="@dimen/text_size_xlarge" />
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/textDark" />
 
                 <TextView
                     android:id="@+id/txtGoal"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Goal: 15 minutes meditation"
-                    style="@style/TextStyleBody"
-                    android:layout_marginTop="@dimen/spacing_tiny" />
-
-                <TextView
-                    android:id="@+id/txtType"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Everyday"
-                    style="@style/TextStyleCaption"
-                    android:layout_marginTop="@dimen/spacing_tiny" />
+                    android:text="Meta diaria"
+                    android:textSize="13sp"
+                    android:textColor="@color/textLight"
+                    android:layout_marginTop="2dp" />
             </LinearLayout>
 
-            <!-- Botones de acción -->
+            <!-- Botones de acción estilizados -->
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:orientation="horizontal">
 
                 <ImageButton
                     android:id="@+id/btnEdit"
-                    android:layout_width="@dimen/icon_size_medium"
-                    android:layout_height="@dimen/icon_size_medium"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:src="@drawable/ic_edit_24"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_card_white"
+                    app:backgroundTint="#F5F5F5"
                     android:contentDescription="@string/edit"
-                    android:tint="@color/teal_700"
-                    android:padding="@dimen/padding_small" />
+                    android:tint="#757575"
+                    android:padding="8dp"
+                    android:layout_marginEnd="8dp"/>
 
                 <ImageButton
                     android:id="@+id/btnDelete"
-                    android:layout_width="@dimen/icon_size_medium"
-                    android:layout_height="@dimen/icon_size_medium"
-                    android:layout_marginStart="@dimen/spacing_small"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:src="@android:drawable/ic_menu_delete"
-                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:background="@drawable/bg_card_white"
+                    app:backgroundTint="#FFEBEE"
                     android:contentDescription="@string/delete"
-                    android:tint="#F44336"
-                    android:padding="@dimen/padding_small" />
+                    android:tint="#D32F2F"
+                    android:padding="8dp" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Progress Bar -->
-        <ProgressBar
-            android:id="@+id/progressHabit"
-            style="?android:attr/progressBarStyleHorizontal"
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="12dp"
-            android:max="100"
-            android:progress="40"
-            android:layout_marginTop="@dimen/spacing_medium"
-            android:progressDrawable="@drawable/progress_circle_drawable" />
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp">
+
+            <ProgressBar
+                android:id="@+id/progressHabit"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="0dp"
+                android:layout_height="8dp"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="40"
+                android:progressDrawable="@drawable/progress_circle_drawable"
+                android:backgroundTint="#F0F0F0"/>
+
+            <TextView
+                android:id="@+id/txtType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="40%"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="@color/orangeEnd"
+                android:layout_marginStart="12dp"/>
+        </LinearLayout>
 
     </LinearLayout>
 

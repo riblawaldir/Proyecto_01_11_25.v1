@@ -11,16 +11,19 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Botón de volver -->
+    <!-- Botón de volver flotante y estilizado -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnBack"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="@dimen/margin_medium"
-        android:src="@android:drawable/ic_menu_revert"
-        app:tint="@android:color/white"
-        app:backgroundTint="@color/teal_700"
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true"
+        android:layout_margin="24dp"
+        android:src="@drawable/ic_arrow_back_24"
+        app:tint="@color/teal_700"
+        app:backgroundTint="@color/white"
+        app:elevation="8dp"
         android:contentDescription="Volver al Dashboard" />
+    <!-- Nota: Cambié la posición a top/start que es más estándar para 'Atrás' en mapas -->
 
 </RelativeLayout>

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FFF8E1"> <!-- Fondo crema suave para lectura -->
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="@dimen/padding_medium"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_arrow_back_24"
+            android:background="@drawable/drawable_gradient_orange"
+            android:padding="8dp"
+            app:tint="@color/white"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+
+        <TextView
+            android:id="@+id/txtTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Lectura Diaria"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:textColor="@color/textDark"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="@dimen/padding_large"
+        app:layout_constraintTop_toBottomOf="@id/headerLayout"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="120dp"
+            android:layout_height="180dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="12dp"
+            android:layout_marginBottom="32dp"
+            app:cardBackgroundColor="@color/orangeStart">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:text="📖"
+                android:gravity="center"
+                android:textSize="60sp" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <TextView
+            android:id="@+id/txtProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 / 10"
+            style="@style/TextStyleTitle"
+            android:textColor="@color/orangeEnd"
+            android:textSize="42sp" />
+
+        <TextView
+            android:id="@+id/txtGoal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="páginas leídas"
+            style="@style/TextStyleSubtitle"
+            android:layout_marginBottom="@dimen/margin_medium" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="12dp"
+            android:layout_marginHorizontal="32dp"
+            android:progressDrawable="@drawable/drawable_gradient_orange"
+            android:layout_marginBottom="40dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddPages"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="+ Registrar Manualmente"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/orangeEnd"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                app:strokeColor="@color/orangeEnd"
+                app:strokeWidth="2dp"
+                app:cornerRadius="12dp"
+                android:layout_marginBottom="12dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnDetectCamera"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:text="📷 Escanear Página"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:background="@drawable/drawable_gradient_orange"
+                app:backgroundTint="@null"
+                app:cornerRadius="12dp"
+                app:elevation="6dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>
