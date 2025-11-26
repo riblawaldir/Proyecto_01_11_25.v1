@@ -54,7 +54,7 @@ public class DashboardActivity extends AppCompatActivity {
     private static final long SETTINGS_CHANGE_COOLDOWN_MS = 2000; // 2 segundos después de cambiar settings
 
     private RecyclerView rv;
-    private FloatingActionButton btnMap;
+    private android.widget.ImageButton btnMap;
     private HabitAdapter adapter;
 
     private LightSensorManager lightSensor;
@@ -83,31 +83,33 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         // Inicializar handler PRIMERO para poder usarlo en el cooldown
         mainHandler = new Handler(Looper.getMainLooper());
-        
+
         // Inicializar ExecutorService para operaciones en segundo plano
         executorService = Executors.newSingleThreadExecutor();
-        
-        // Cargar estado persistente con valores por defecto: modo claro y foco desactivado
+
+        // Cargar estado persistente con valores por defecto: modo claro y foco
+        // desactivado
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        
+
         // Guardar tiempo de creación para delay inicial
         activityCreateTime = System.currentTimeMillis();
-        
+
         // Cargar tiempo de última recreación desde SharedPreferences
         lastRecreationTime = prefs.getLong(KEY_LAST_RECREATION_TIME, 0);
-        
+
         // Verificar si acabamos de recrear (evitar loops)
-        long timeSinceLastRecreation = lastRecreationTime > 0 ? 
-            System.currentTimeMillis() - lastRecreationTime : Long.MAX_VALUE;
-        
+        long timeSinceLastRecreation = lastRecreationTime > 0 ? System.currentTimeMillis() - lastRecreationTime
+                : Long.MAX_VALUE;
+
         // Si acabamos de recrear, bloquear completamente cualquier otra recreación
         boolean justRecreated = timeSinceLastRecreation < RECREATION_COOLDOWN_MS;
-        
+
         if (justRecreated) {
-            android.util.Log.d("Dashboard", "⚠️ Recreación reciente, bloqueando cambios: " + timeSinceLastRecreation + "ms");
+            android.util.Log.d("Dashboard",
+                    "⚠️ Recreación reciente, bloqueando cambios: " + timeSinceLastRecreation + "ms");
             isRecreating = true;
             // Mantener el flag por un tiempo adicional
             mainHandler.postDelayed(() -> {
@@ -117,38 +119,43 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             isRecreating = false;
         }
-        
+
         focusMode = prefs.getBoolean(KEY_FOCUS_MODE, false); // Por defecto: false (desactivado)
         isNight = prefs.getBoolean(KEY_NIGHT_MODE, false); // Por defecto: false (modo claro)
-        
+
         // Cargar configuraciones de sensores
         boolean darkModeSensors = prefs.getBoolean("dark_mode_sensors", false);
         boolean focusModeSensors = prefs.getBoolean("focus_mode_sensors", false);
-        
-        android.util.Log.d("Dashboard", "onCreate - focusMode: " + focusMode + ", isNight: " + isNight + ", darkModeSensors: " + darkModeSensors + ", focusModeSensors: " + focusModeSensors);
-        
+
+        android.util.Log.d("Dashboard", "onCreate - focusMode: " + focusMode + ", isNight: " + isNight
+                + ", darkModeSensors: " + darkModeSensors + ", focusModeSensors: " + focusModeSensors);
+
         // Aplicar tema ANTES de setContentView (crítico)
         // El tema debe aplicarse después de cargar todas las preferencias
         applyTheme();
-        
-        // Configurar modo nocturno según el estado guardado (solo si NO está en modo foco)
+
+        // Configurar modo nocturno según el estado guardado (solo si NO está en modo
+        // foco)
         // Si acabamos de recrear, NO cambiar AppCompatDelegate para evitar loops
         if (!justRecreated && !focusMode) {
-            // Solo sincronizar AppCompatDelegate si no acabamos de recrear y no está en modo foco
+            // Solo sincronizar AppCompatDelegate si no acabamos de recrear y no está en
+            // modo foco
             int currentNightMode = AppCompatDelegate.getDefaultNightMode();
             int desiredNightMode = isNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO;
-            
+
             if (currentNightMode != desiredNightMode) {
                 android.util.Log.d("Dashboard", "Sincronizando modo nocturno: " + desiredNightMode);
                 AppCompatDelegate.setDefaultNightMode(desiredNightMode);
             }
         } else if (justRecreated) {
-            android.util.Log.d("Dashboard", "⚠️ Saltando sincronización de modo nocturno (en cooldown, tema ya aplicado)");
+            android.util.Log.d("Dashboard",
+                    "⚠️ Saltando sincronización de modo nocturno (en cooldown, tema ya aplicado)");
         }
-        
+
         setContentView(R.layout.activity_dashboard);
-        
-        // Reconfigurar barra de navegación después de setContentView (especialmente importante en modo foco)
+
+        // Reconfigurar barra de navegación después de setContentView (especialmente
+        // importante en modo foco)
         setupBottomNavigation();
 
         // Configurar indicador de conexión
@@ -156,8 +163,10 @@ public class DashboardActivity extends AppCompatActivity {
 
         fused = LocationServices.getFusedLocationProviderClient(this);
 
-        // 🔥 ELIMINAR BASE DE DATOS LOCAL para forzar sincronización limpia desde la API
-        // Esto resuelve conflictos y asegura que la app se sincronice correctamente con el servidor
+        // 🔥 ELIMINAR BASE DE DATOS LOCAL para forzar sincronización limpia desde la
+        // API
+        // Esto resuelve conflictos y asegura que la app se sincronice correctamente con
+        // el servidor
         // Solo se hace una vez usando SharedPreferences
         android.content.SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
         boolean dbDeleted = prefs.getBoolean("local_db_deleted", false);
@@ -177,16 +186,16 @@ public class DashboardActivity extends AppCompatActivity {
         habitRepository = HabitRepository.getInstance(this);
 
         // 🔥 Cargar hábitos usando Repository (SQLite + API)
-        // Como la base de datos está vacía, se descargarán todos los hábitos desde la API
+        // Como la base de datos está vacía, se descargarán todos los hábitos desde la
+        // API
         loadHabitsFromRepository();
 
         rv = findViewById(R.id.rvHabits);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new HabitAdapter(new ArrayList<>(), 
-            this::completeDemoHabit,
-            this::editHabit,
-            this::deleteHabit
-        );
+        adapter = new HabitAdapter(new ArrayList<>(),
+                this::completeDemoHabit,
+                this::editHabit,
+                this::deleteHabit);
         rv.setAdapter(adapter);
 
         btnMap = findViewById(R.id.btnMap);
@@ -201,17 +210,19 @@ public class DashboardActivity extends AppCompatActivity {
         FloatingActionButton btnCamera = findViewById(R.id.btnCamera);
         btnCamera.setOnClickListener(v -> {
             // Verificar permiso de cámara
-            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA) 
-                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, 
-                    new String[]{android.Manifest.permission.CAMERA}, 100);
+            if (ContextCompat.checkSelfPermission(this,
+                    android.Manifest.permission.CAMERA) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[] { android.Manifest.permission.CAMERA }, 100);
             } else {
                 openCameraForReading();
             }
         });
 
-        // Botón temporal para resetear estado (solo para debugging - remover en producción)
-        com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton fabAddHabit = findViewById(R.id.fabAddHabit);
+        // Botón temporal para resetear estado (solo para debugging - remover en
+        // producción)
+        com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton fabAddHabit = findViewById(
+                R.id.fabAddHabit);
         if (fabAddHabit != null) {
             fabAddHabit.setOnClickListener(v -> {
                 startActivityForResult(new Intent(this, SelectHabitTypeActivity.class), 500);
@@ -225,7 +236,8 @@ public class DashboardActivity extends AppCompatActivity {
         });
         walkSensor.start();
 
-        // 🔦 Sensor de luz — modo nocturno dinámico (solo si está habilitado en configuración)
+        // 🔦 Sensor de luz — modo nocturno dinámico (solo si está habilitado en
+        // configuración)
         if (darkModeSensors) {
             lightSensor = new LightSensorManager(this, new LightSensorManager.OnLowLightListener() {
                 @Override
@@ -241,40 +253,43 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             lightSensor = null;
         }
-        
+
         // 🏋️ Sensor de acelerómetro — detección de ejercicio/movimiento
         accelerometerSensor = new AccelerometerSensorManager(this, () -> {
             // Callback cuando se detecta ejercicio (movimiento continuo)
             completeHabitByType(Habit.HabitType.EXERCISE);
         });
 
-        // 🧘 Sensor de giros — modo foco azul (solo si está habilitado en configuración)
+        // 🧘 Sensor de giros — modo foco azul (solo si está habilitado en
+        // configuración)
         if (focusModeSensors) {
             gyroSensor = new GyroSensorManager(this, this::activateFocusMode);
         } else {
             gyroSensor = null;
         }
-        
+
         // Iniciar sensores después de un delay para evitar loops
         long delayBeforeStartingSensors = SENSOR_DELAY_MS;
-        
+
         if (justRecreated) {
             // Si acabamos de recrear, esperar el cooldown completo + delay adicional
             long remainingCooldown = RECREATION_COOLDOWN_MS - timeSinceLastRecreation;
             delayBeforeStartingSensors = remainingCooldown + SENSOR_DELAY_MS + 2000; // +2s extra de seguridad
-            android.util.Log.d("Dashboard", "⚠️ Sensores en espera: cooldown restante " + remainingCooldown + "ms, delay total: " + delayBeforeStartingSensors + "ms");
+            android.util.Log.d("Dashboard", "⚠️ Sensores en espera: cooldown restante " + remainingCooldown
+                    + "ms, delay total: " + delayBeforeStartingSensors + "ms");
         }
-        
+
         // Crear variable final para usar en lambda
         final long finalDelay = delayBeforeStartingSensors;
-        
-        // Los sensores DEBEN activarse después del delay, incluso si justRecreated era true
+
+        // Los sensores DEBEN activarse después del delay, incluso si justRecreated era
+        // true
         // porque el delay ya incluye el tiempo de cooldown
         mainHandler.postDelayed(() -> {
             // Verificar nuevamente si estamos en cooldown (por si acaso)
-            long currentTimeSinceRecreation = lastRecreationTime > 0 ? 
-                System.currentTimeMillis() - lastRecreationTime : Long.MAX_VALUE;
-            
+            long currentTimeSinceRecreation = lastRecreationTime > 0 ? System.currentTimeMillis() - lastRecreationTime
+                    : Long.MAX_VALUE;
+
             // Limpiar lastRecreationTime si ya pasó mucho tiempo (más de 2x cooldown)
             // Esto evita que se quede bloqueado si la app se reinició
             if (currentTimeSinceRecreation > RECREATION_COOLDOWN_MS * 2) {
@@ -282,19 +297,24 @@ public class DashboardActivity extends AppCompatActivity {
                 prefs.edit().remove(KEY_LAST_RECREATION_TIME).apply();
                 android.util.Log.d("Dashboard", "🧹 Limpiando lastRecreationTime (muy antiguo)");
             }
-            
-            if (currentTimeSinceRecreation >= RECREATION_COOLDOWN_MS && !isRecreating && !isFinishing() && !isDestroyed()) {
-                if (lightSensor != null) lightSensor.start();
+
+            if (currentTimeSinceRecreation >= RECREATION_COOLDOWN_MS && !isRecreating && !isFinishing()
+                    && !isDestroyed()) {
+                if (lightSensor != null)
+                    lightSensor.start();
                 accelerometerSensor.start();
-                if (gyroSensor != null) gyroSensor.start();
-                
-                // Reiniciar lastLightChange para permitir cambios inmediatos después de activar sensores
+                if (gyroSensor != null)
+                    gyroSensor.start();
+
+                // Reiniciar lastLightChange para permitir cambios inmediatos después de activar
+                // sensores
                 lastLightChange = 0;
-                
-                android.util.Log.d("Dashboard", "✅ Sensores activados después de delay: " + finalDelay + "ms (cooldown: " + currentTimeSinceRecreation + "ms)");
+
+                android.util.Log.d("Dashboard", "✅ Sensores activados después de delay: " + finalDelay
+                        + "ms (cooldown: " + currentTimeSinceRecreation + "ms)");
             } else {
-                android.util.Log.d("Dashboard", "⚠️ Sensores NO activados: cooldown=" + currentTimeSinceRecreation + 
-                    "ms, isRecreating=" + isRecreating + ", isFinishing=" + isFinishing());
+                android.util.Log.d("Dashboard", "⚠️ Sensores NO activados: cooldown=" + currentTimeSinceRecreation +
+                        "ms, isRecreating=" + isRecreating + ", isFinishing=" + isFinishing());
             }
         }, finalDelay);
     }
@@ -308,33 +328,32 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.e("Dashboard", "bottomNavContainer es null");
             return;
         }
-        
+
         // Limpiar contenedor si ya tiene vistas
         bottomNavContainer.removeAllViews();
-        
+
         try {
-            com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = 
-                new com.google.android.material.bottomnavigation.BottomNavigationView(this);
-            
+            com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = new com.google.android.material.bottomnavigation.BottomNavigationView(
+                    this);
+
             // Configurar layout
             android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
-            );
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
             bottomNav.setLayoutParams(params);
-            
+
             // Configurar menú
             bottomNav.inflateMenu(R.menu.bottom_navigation);
-            
+
             // Configurar colores programáticamente
             bottomNav.setItemIconTintList(createBottomNavColorStateList());
             bottomNav.setItemTextColor(createBottomNavColorStateList());
-            
+
             // Configurar fondo para que sea visible en modo foco
             if (focusMode) {
                 bottomNav.setBackgroundColor(android.graphics.Color.parseColor("#001440"));
             }
-            
+
             // Configurar listener
             bottomNav.setOnItemSelectedListener(item -> {
                 int itemId = item.getItemId();
@@ -344,36 +363,39 @@ public class DashboardActivity extends AppCompatActivity {
                 } else if (itemId == R.id.nav_scores) {
                     startActivity(new Intent(this, ScoresActivity.class));
                     return true;
+                } else if (itemId == R.id.nav_profile) {
+                    startActivity(new Intent(this, ProfileActivity.class));
+                    return true;
                 }
                 return false;
             });
-            
+
             // Agregar al contenedor
             bottomNavContainer.addView(bottomNav);
             bottomNavContainer.setVisibility(android.view.View.VISIBLE);
-            
+
             android.util.Log.d("Dashboard", "BottomNavigationView creado exitosamente");
         } catch (Exception e) {
             android.util.Log.e("Dashboard", "Error creando bottom nav", e);
             e.printStackTrace();
         }
     }
-    
+
     /**
      * Crea un ColorStateList para el BottomNavigationView
      */
     private android.content.res.ColorStateList createBottomNavColorStateList() {
-        int[][] states = new int[][]{
-            new int[]{android.R.attr.state_checked},
-            new int[]{-android.R.attr.state_checked}
+        int[][] states = new int[][] {
+                new int[] { android.R.attr.state_checked },
+                new int[] { -android.R.attr.state_checked }
         };
-        int[] colors = new int[]{
-            android.graphics.Color.parseColor("#FF5200"), // Naranja cuando está seleccionado
-            android.graphics.Color.parseColor("#888888")  // Gris cuando no está seleccionado
+        int[] colors = new int[] {
+                android.graphics.Color.parseColor("#FF5200"), // Naranja cuando está seleccionado
+                android.graphics.Color.parseColor("#888888") // Gris cuando no está seleccionado
         };
         return new android.content.res.ColorStateList(states, colors);
     }
-    
+
     /**
      * Configura el indicador de conexión (verde = online, rojo = offline)
      */
@@ -383,17 +405,17 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.w("Dashboard", "connectionIndicator no encontrado en el layout");
             return;
         }
-        
+
         // Inicializar ConnectionMonitor
         connectionMonitor = ConnectionMonitor.getInstance(this);
-        
+
         // Agregar listener para actualizar el indicador
         connectionMonitor.addListener(connectionListener);
-        
+
         // Actualizar estado inicial
         updateConnectionIndicator(connectionMonitor.isConnected());
     }
-    
+
     /**
      * Listener para cambios de conexión
      */
@@ -404,13 +426,14 @@ public class DashboardActivity extends AppCompatActivity {
             mainHandler.post(() -> updateConnectionIndicator(isConnected));
         }
     };
-    
+
     /**
      * Actualiza el indicador visual de conexión
      */
     private void updateConnectionIndicator(boolean isConnected) {
-        if (connectionIndicator == null) return;
-        
+        if (connectionIndicator == null)
+            return;
+
         if (isConnected) {
             // Verde = Conectado a la API
             connectionIndicator.setBackgroundResource(R.drawable.connection_indicator_online);
@@ -423,35 +446,37 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.d("Dashboard", "🔴 Indicador: Modo offline (SQLite)");
         }
     }
-    
+
     /**
      * Activa o desactiva las notificaciones según el modo foco
      */
     private void toggleNotifications(boolean enable) {
         try {
-            android.app.NotificationManager notificationManager = 
-                (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            
+            android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(
+                    Context.NOTIFICATION_SERVICE);
+
             if (notificationManager == null) {
                 android.util.Log.e("Dashboard", "NotificationManager es null");
                 return;
             }
-            
+
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                 // Para Android 6.0+ necesitamos verificar si tenemos permiso
                 if (!notificationManager.isNotificationPolicyAccessGranted()) {
                     // Si no tenemos permiso, intentar abrir la configuración
-                    android.util.Log.d("Dashboard", "No hay permiso para cambiar notificaciones, abriendo configuración");
+                    android.util.Log.d("Dashboard",
+                            "No hay permiso para cambiar notificaciones, abriendo configuración");
                     Intent intent = new Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
                     try {
                         startActivity(intent);
-                        Toast.makeText(this, "Por favor, otorga permiso para controlar notificaciones", Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, "Por favor, otorga permiso para controlar notificaciones",
+                                Toast.LENGTH_LONG).show();
                     } catch (Exception e) {
                         android.util.Log.e("Dashboard", "Error abriendo configuración de notificaciones", e);
                     }
                     return;
                 }
-                
+
                 // Desactivar/activar notificaciones
                 if (enable) {
                     // Activar notificaciones
@@ -463,7 +488,8 @@ public class DashboardActivity extends AppCompatActivity {
                     android.util.Log.d("Dashboard", "Notificaciones desactivadas (modo foco)");
                 }
             } else {
-                // Para versiones anteriores a Android 6.0, no podemos controlar notificaciones programáticamente
+                // Para versiones anteriores a Android 6.0, no podemos controlar notificaciones
+                // programáticamente
                 android.util.Log.d("Dashboard", "Versión de Android no soporta control de notificaciones");
                 Toast.makeText(this, "Esta función requiere Android 6.0 o superior", Toast.LENGTH_SHORT).show();
             }
@@ -471,7 +497,7 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.e("Dashboard", "Error al cambiar estado de notificaciones", e);
         }
     }
-    
+
     /**
      * Aplicar tema según el estado actual y configuración
      */
@@ -481,9 +507,10 @@ public class DashboardActivity extends AppCompatActivity {
         boolean currentNightMode = prefs.getBoolean(KEY_NIGHT_MODE, false);
         boolean darkModeSensors = prefs.getBoolean("dark_mode_sensors", false);
         boolean focusModeSensors = prefs.getBoolean("focus_mode_sensors", false);
-        
-        android.util.Log.d("Dashboard", "applyTheme - currentFocusMode: " + currentFocusMode + ", currentNightMode: " + currentNightMode);
-        
+
+        android.util.Log.d("Dashboard",
+                "applyTheme - currentFocusMode: " + currentFocusMode + ", currentNightMode: " + currentNightMode);
+
         // Tema FOCUS tiene prioridad absoluta - sobrescribe todo
         if (currentFocusMode) {
             setTheme(R.style.Theme_Proyecto_01_11_25_Focus);
@@ -497,7 +524,7 @@ public class DashboardActivity extends AppCompatActivity {
             setTheme(R.style.Theme_Proyecto_01_11_25);
             android.util.Log.d("Dashboard", "✅ Tema: Modo claro");
         }
-        
+
         // Forzar recreación del ActionBar si existe
         supportInvalidateOptionsMenu();
     }
@@ -507,36 +534,40 @@ public class DashboardActivity extends AppCompatActivity {
      */
     private void handleLightChange(boolean isLowLight) {
         android.util.Log.d("Dashboard", "handleLightChange: isLowLight=" + isLowLight + ", isNight=" + isNight);
-        
+
         long now = System.currentTimeMillis();
-        
+
         // Evitar cambios durante recreación
         if (isRecreating) {
             android.util.Log.d("Dashboard", "Ignorando cambio: isRecreating=true");
             return;
         }
-        
+
         // Evitar cambios poco tiempo después de crear la actividad
         long timeSinceCreation = now - activityCreateTime;
         if (timeSinceCreation < SENSOR_DELAY_MS) {
-            android.util.Log.d("Dashboard", "Ignorando cambio: muy pronto después de crear (" + timeSinceCreation + "ms)");
+            android.util.Log.d("Dashboard",
+                    "Ignorando cambio: muy pronto después de crear (" + timeSinceCreation + "ms)");
             return;
         }
-        
+
         // Evitar cambios poco tiempo después de recrear
         long timeSinceRecreation = lastRecreationTime > 0 ? now - lastRecreationTime : Long.MAX_VALUE;
         if (timeSinceRecreation < RECREATION_COOLDOWN_MS) {
-            android.util.Log.d("Dashboard", "Ignorando cambio: en cooldown después de recrear (" + timeSinceRecreation + "ms < " + RECREATION_COOLDOWN_MS + "ms)");
+            android.util.Log.d("Dashboard", "Ignorando cambio: en cooldown después de recrear (" + timeSinceRecreation
+                    + "ms < " + RECREATION_COOLDOWN_MS + "ms)");
             return;
         }
 
         // Debounce adicional (solo si lastLightChange > 0)
-        // Si lastLightChange es 0, significa que acabamos de activar los sensores - permitir cambio inmediato
+        // Si lastLightChange es 0, significa que acabamos de activar los sensores -
+        // permitir cambio inmediato
         if (lastLightChange > 0 && (now - lastLightChange < LIGHT_DEBOUNCE_MS)) {
-            android.util.Log.d("Dashboard", "Ignorando cambio: debounce activo (" + (now - lastLightChange) + "ms < " + LIGHT_DEBOUNCE_MS + "ms)");
+            android.util.Log.d("Dashboard", "Ignorando cambio: debounce activo (" + (now - lastLightChange) + "ms < "
+                    + LIGHT_DEBOUNCE_MS + "ms)");
             return;
         }
-        
+
         if (lastLightChange == 0) {
             android.util.Log.d("Dashboard", "✅ Primera detección después de activar sensores - permitiendo cambio");
         }
@@ -553,36 +584,37 @@ public class DashboardActivity extends AppCompatActivity {
 
     /**
      * Cambia el modo nocturno sin causar loops
-     * NOTA: El sensor de luz puede sobrescribir el modo foco si detecta cambios significativos
+     * NOTA: El sensor de luz puede sobrescribir el modo foco si detecta cambios
+     * significativos
      */
     private void changeNightMode(boolean enableNight) {
         if (isRecreating) {
             android.util.Log.d("Dashboard", "No se puede cambiar: isRecreating=" + isRecreating);
             return;
         }
-        
+
         // Detener sensor ANTES de cambiar para evitar eventos durante la recreación
         if (lightSensor != null) {
             android.util.Log.d("Dashboard", "Deteniendo sensor de luz antes de cambiar tema");
             lightSensor.stop();
         }
-        
+
         // Si está en modo foco, salir de él primero para permitir cambio de tema
         if (focusMode) {
             android.util.Log.d("Dashboard", "Saliendo del modo foco para cambiar tema");
             focusMode = false;
             prefs.edit().putBoolean(KEY_FOCUS_MODE, false).apply();
         }
-        
+
         android.util.Log.d("Dashboard", "Cambiando a modo nocturno: " + enableNight);
         isNight = enableNight;
         prefs.edit().putBoolean(KEY_NIGHT_MODE, isNight).apply();
-        
+
         AppCompatDelegate.setDefaultNightMode(
-            enableNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO
-        );
-        
-        Toast.makeText(this, enableNight ? "🌙 Modo oscuro activado" : "☀️ Modo claro activado", Toast.LENGTH_SHORT).show();
+                enableNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+
+        Toast.makeText(this, enableNight ? "🌙 Modo oscuro activado" : "☀️ Modo claro activado", Toast.LENGTH_SHORT)
+                .show();
         safeRecreate();
     }
 
@@ -590,13 +622,14 @@ public class DashboardActivity extends AppCompatActivity {
      * Activa el modo foco (azul) con giroscopio
      */
     private void activateFocusMode() {
-        android.util.Log.d("Dashboard", "activateFocusMode llamado: isRecreating=" + isRecreating + ", focusMode=" + focusMode);
-        
+        android.util.Log.d("Dashboard",
+                "activateFocusMode llamado: isRecreating=" + isRecreating + ", focusMode=" + focusMode);
+
         if (isRecreating) {
             android.util.Log.d("Dashboard", "Recreando, ignorando activación");
             return;
         }
-        
+
         // Permitir activar/desactivar modo foco con giros
         if (focusMode) {
             android.util.Log.d("Dashboard", "Desactivando modo foco (ya estaba activo)");
@@ -604,8 +637,7 @@ public class DashboardActivity extends AppCompatActivity {
             prefs.edit().putBoolean(KEY_FOCUS_MODE, false).apply();
             // Restaurar modo nocturno guardado
             AppCompatDelegate.setDefaultNightMode(
-                isNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO
-            );
+                    isNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
             // Reactivar notificaciones
             toggleNotifications(true);
             Toast.makeText(this, "💙 Modo Foco Desactivado", Toast.LENGTH_SHORT).show();
@@ -620,7 +652,7 @@ public class DashboardActivity extends AppCompatActivity {
             // Registrar evento en mapa
             addLocationEvent("Modo Foco 🧘 Activado", HabitEvent.HabitType.FOCUS);
         }
-        
+
         safeRecreate();
     }
 
@@ -632,23 +664,24 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.d("Dashboard", "⚠️ Ya se está recreando, ignorando");
             return;
         }
-        
+
         // Verificar cooldown antes de recrear
-        long timeSinceLastRecreation = lastRecreationTime > 0 ? 
-            System.currentTimeMillis() - lastRecreationTime : Long.MAX_VALUE;
-        
+        long timeSinceLastRecreation = lastRecreationTime > 0 ? System.currentTimeMillis() - lastRecreationTime
+                : Long.MAX_VALUE;
+
         if (timeSinceLastRecreation < RECREATION_COOLDOWN_MS) {
             android.util.Log.d("Dashboard", "⚠️ Recreación bloqueada: en cooldown (" + timeSinceLastRecreation + "ms)");
             return;
         }
-        
+
         android.util.Log.d("Dashboard", "✅ Iniciando recreación segura");
         isRecreating = true;
         lastRecreationTime = System.currentTimeMillis();
-        
-        // Guardar tiempo de recreación en SharedPreferences para persistir entre recreaciones
+
+        // Guardar tiempo de recreación en SharedPreferences para persistir entre
+        // recreaciones
         prefs.edit().putLong(KEY_LAST_RECREATION_TIME, lastRecreationTime).apply();
-        
+
         // Detener TODOS los sensores antes de recrear
         if (lightSensor != null) {
             lightSensor.stop();
@@ -662,20 +695,21 @@ public class DashboardActivity extends AppCompatActivity {
             gyroSensor.stop();
             android.util.Log.d("Dashboard", "Sensor de giroscopio detenido");
         }
-        
+
         // Limpiar handlers pendientes
         if (mainHandler != null) {
             mainHandler.removeCallbacksAndMessages(null);
         }
-        
-        // Recrear después de un delay más largo para asegurar que los sensores se detuvieron
+
+        // Recrear después de un delay más largo para asegurar que los sensores se
+        // detuvieron
         mainHandler.postDelayed(() -> {
             if (isFinishing() || isDestroyed()) {
                 android.util.Log.d("Dashboard", "Activity ya destruida, no recrear");
                 isRecreating = false;
                 return;
             }
-            
+
             android.util.Log.d("Dashboard", "🔄 Ejecutando recreate()");
             try {
                 recreate();
@@ -689,28 +723,32 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        
+
         // Cerrar ExecutorService
         if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
         }
-        
+
         // Limpiar handlers pendientes
         if (mainHandler != null) {
             mainHandler.removeCallbacksAndMessages(null);
         }
-        
+
         // Cerrar ExecutorService
         if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
         }
-        
+
         // Detener sensores
-        if (walkSensor != null) walkSensor.stop();
-        if (lightSensor != null) lightSensor.stop();
-        if (accelerometerSensor != null) accelerometerSensor.stop();
-        if (gyroSensor != null) gyroSensor.stop();
-        
+        if (walkSensor != null)
+            walkSensor.stop();
+        if (lightSensor != null)
+            lightSensor.stop();
+        if (accelerometerSensor != null)
+            accelerometerSensor.stop();
+        if (gyroSensor != null)
+            gyroSensor.stop();
+
         // Remover listener de ConnectionMonitor
         if (connectionMonitor != null) {
             connectionMonitor.removeListener(connectionListener);
@@ -719,32 +757,33 @@ public class DashboardActivity extends AppCompatActivity {
 
     // MÉTODO ELIMINADO: Los hábitos ahora vienen exclusivamente de la API
     // /**
-    //  * Carga los hábitos predeterminados y restaura sus estados de completado
-    //  */
+    // * Carga los hábitos predeterminados y restaura sus estados de completado
+    // */
     // private List<Habit> loadHabitsWithState() {
-    //     List<Habit> defaultHabits = Habit.defaultHabits();
-    //     
-    //     // Cargar estados guardados
-    //     String habitsStateJson = prefs.getString(KEY_HABITS_STATE, null);
-    //     if (habitsStateJson != null) {
-    //         try {
-    //             JSONObject stateJson = new JSONObject(habitsStateJson);
-    //             
-    //             // Restaurar estado de cada hábito
-    //             for (Habit habit : defaultHabits) {
-    //                 String habitKey = habit.getTitle(); // Usar título como key
-    //                 if (stateJson.has(habitKey)) {
-    //                     boolean completed = stateJson.getBoolean(habitKey);
-    //                     habit.setCompleted(completed);
-    //                     android.util.Log.d("Dashboard", "Restaurado estado de " + habitKey + ": " + completed);
-    //                 }
-    //             }
-    //         } catch (JSONException e) {
-    //             android.util.Log.e("Dashboard", "Error al cargar estados de hábitos", e);
-    //         }
-    //     }
-    //     
-    //     return defaultHabits;
+    // List<Habit> defaultHabits = Habit.defaultHabits();
+    //
+    // // Cargar estados guardados
+    // String habitsStateJson = prefs.getString(KEY_HABITS_STATE, null);
+    // if (habitsStateJson != null) {
+    // try {
+    // JSONObject stateJson = new JSONObject(habitsStateJson);
+    //
+    // // Restaurar estado de cada hábito
+    // for (Habit habit : defaultHabits) {
+    // String habitKey = habit.getTitle(); // Usar título como key
+    // if (stateJson.has(habitKey)) {
+    // boolean completed = stateJson.getBoolean(habitKey);
+    // habit.setCompleted(completed);
+    // android.util.Log.d("Dashboard", "Restaurado estado de " + habitKey + ": " +
+    // completed);
+    // }
+    // }
+    // } catch (JSONException e) {
+    // android.util.Log.e("Dashboard", "Error al cargar estados de hábitos", e);
+    // }
+    // }
+    //
+    // return defaultHabits;
     // }
 
     /**
@@ -753,11 +792,11 @@ public class DashboardActivity extends AppCompatActivity {
     private void saveHabitsState() {
         try {
             JSONObject stateJson = new JSONObject();
-            
+
             for (Habit habit : habits) {
                 stateJson.put(habit.getTitle(), habit.isCompleted());
             }
-            
+
             prefs.edit().putString(KEY_HABITS_STATE, stateJson.toString()).apply();
             android.util.Log.d("Dashboard", "Estados de hábitos guardados");
         } catch (JSONException e) {
@@ -768,20 +807,19 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        
+
         if (requestCode == 200 && resultCode == RESULT_OK && data != null) {
             // Cámara desde botón principal (lectura)
             long habitId = data.getLongExtra("habit_id", -1);
             if (habitId > 0) {
                 // Página detectada y agregada, actualizar Dashboard
                 refreshHabitsList();
-                
+
                 // Mostrar Snackbar de confirmación
                 com.google.android.material.snackbar.Snackbar.make(
-                    findViewById(android.R.id.content),
-                    "Página detectada y registrada 📘✔",
-                    com.google.android.material.snackbar.Snackbar.LENGTH_SHORT
-                ).show();
+                        findViewById(android.R.id.content),
+                        "Página detectada y registrada 📘✔",
+                        com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show();
             } else {
                 // Comportamiento antiguo para READ (sin habit_id)
                 String habitType = data.getStringExtra("habit_completed");
@@ -799,7 +837,7 @@ public class DashboardActivity extends AppCompatActivity {
         } else if (requestCode == 500 && resultCode == RESULT_OK) {
             // SelectHabitTypeActivity -> ConfigureHabitActivity (creación)
             refreshHabitsList();
-            
+
             // Si se creó un hábito de leer desde el diálogo, abrir cámara automáticamente
             if (shouldOpenCameraAfterCreation) {
                 shouldOpenCameraAfterCreation = false; // Resetear flag
@@ -815,7 +853,7 @@ public class DashboardActivity extends AppCompatActivity {
                             }
                         }
                     }
-                    
+
                     if (readingHabit != null) {
                         Intent cameraIntent = new Intent(this, CameraActivity.class);
                         cameraIntent.putExtra("habit_id", readingHabit.getId());
@@ -825,13 +863,14 @@ public class DashboardActivity extends AppCompatActivity {
                 }, 500);
             }
         }
-        
-        // Recargar hábitos cuando se vuelve de crear/editar (para casos sin resultCode específico)
+
+        // Recargar hábitos cuando se vuelve de crear/editar (para casos sin resultCode
+        // específico)
         if (dbHelper != null && resultCode == RESULT_OK) {
             refreshHabitsList();
         }
     }
-    
+
     /**
      * Carga hábitos usando Repository (SQLite + API)
      */
@@ -839,7 +878,7 @@ public class DashboardActivity extends AppCompatActivity {
         if (habitRepository == null) {
             habitRepository = HabitRepository.getInstance(this);
         }
-        
+
         habitRepository.getAllHabits(new HabitRepository.RepositoryCallback<List<Habit>>() {
             @Override
             public void onSuccess(List<Habit> habitsList) {
@@ -879,10 +918,10 @@ public class DashboardActivity extends AppCompatActivity {
         if (habitRepository == null) {
             habitRepository = HabitRepository.getInstance(this);
         }
-        
+
         // Usar Repository para refrescar (sincroniza con API si hay conexión)
         loadHabitsFromRepository();
-        
+
         // Forzar sincronización inmediata si hay conexión
         if (connectionMonitor != null && connectionMonitor.isConnected()) {
             android.util.Log.d("Dashboard", "Forzando sincronización inmediata...");
@@ -893,30 +932,31 @@ public class DashboardActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        
+
         // Refrescar lista cuando se vuelve a la Activity (actualización en tiempo real)
         refreshHabitsList();
-        
+
         // Verificar cooldown antes de hacer cualquier cambio
-        long timeSinceLastRecreation = lastRecreationTime > 0 ? 
-            System.currentTimeMillis() - lastRecreationTime : Long.MAX_VALUE;
-        
+        long timeSinceLastRecreation = lastRecreationTime > 0 ? System.currentTimeMillis() - lastRecreationTime
+                : Long.MAX_VALUE;
+
         if (timeSinceLastRecreation < RECREATION_COOLDOWN_MS) {
-            android.util.Log.d("Dashboard", "onResume - En cooldown, ignorando cambios: " + timeSinceLastRecreation + "ms");
+            android.util.Log.d("Dashboard",
+                    "onResume - En cooldown, ignorando cambios: " + timeSinceLastRecreation + "ms");
             return;
         }
-        
+
         // Verificar si hubo un cambio reciente en SettingsActivity
         long lastSettingsChange = prefs.getLong(KEY_LAST_SETTINGS_CHANGE, 0);
-        long timeSinceSettingsChange = lastSettingsChange > 0 ? 
-            System.currentTimeMillis() - lastSettingsChange : Long.MAX_VALUE;
-        
+        long timeSinceSettingsChange = lastSettingsChange > 0 ? System.currentTimeMillis() - lastSettingsChange
+                : Long.MAX_VALUE;
+
         // Verificar si cambió el modo foco desde SettingsActivity
         boolean newFocusMode = prefs.getBoolean(KEY_FOCUS_MODE, false);
         boolean newNightMode = prefs.getBoolean(KEY_NIGHT_MODE, false);
         boolean darkModeSensors = prefs.getBoolean("dark_mode_sensors", false);
         boolean focusModeSensors = prefs.getBoolean("focus_mode_sensors", false);
-        
+
         // IMPORTANTE: Detener sensor de luz si dark_mode_sensors está desactivado
         // Esto previene que el sensor interfiera cuando se activa el modo dark manual
         if (!darkModeSensors && lightSensor != null) {
@@ -924,21 +964,24 @@ public class DashboardActivity extends AppCompatActivity {
             lightSensor.stop();
             lightSensor = null;
         }
-        
+
         // IMPORTANTE: Detener sensor de giro si focus_mode_sensors está desactivado
         if (!focusModeSensors && gyroSensor != null) {
             android.util.Log.d("Dashboard", "onResume - Deteniendo sensor de giro (focus_mode_sensors desactivado)");
             gyroSensor.stop();
             gyroSensor = null;
         }
-        
+
         // Si cambió el modo foco o modo nocturno, aplicar tema y recrear
-        // PERO solo si no estamos en cooldown, no estamos recreando, y ha pasado suficiente tiempo desde el cambio en settings
+        // PERO solo si no estamos en cooldown, no estamos recreando, y ha pasado
+        // suficiente tiempo desde el cambio en settings
         if ((newFocusMode != focusMode || newNightMode != isNight) && !isRecreating) {
-            // Si el cambio fue muy reciente (menos de SETTINGS_CHANGE_COOLDOWN_MS), esperar un poco más
+            // Si el cambio fue muy reciente (menos de SETTINGS_CHANGE_COOLDOWN_MS), esperar
+            // un poco más
             // PERO si es modo foco, aplicar inmediatamente (tiene prioridad)
             if (timeSinceSettingsChange < SETTINGS_CHANGE_COOLDOWN_MS && !newFocusMode) {
-                android.util.Log.d("Dashboard", "onResume - Cambio detectado pero muy reciente, esperando: " + timeSinceSettingsChange + "ms");
+                android.util.Log.d("Dashboard",
+                        "onResume - Cambio detectado pero muy reciente, esperando: " + timeSinceSettingsChange + "ms");
                 // Programar recreación después del cooldown
                 if (mainHandler != null) {
                     mainHandler.postDelayed(() -> {
@@ -956,26 +999,27 @@ public class DashboardActivity extends AppCompatActivity {
                 }
                 return;
             }
-            
-            android.util.Log.d("Dashboard", "onResume - Cambio detectado: focusMode=" + focusMode + " -> " + newFocusMode + ", isNight=" + isNight + " -> " + newNightMode);
+
+            android.util.Log.d("Dashboard", "onResume - Cambio detectado: focusMode=" + focusMode + " -> "
+                    + newFocusMode + ", isNight=" + isNight + " -> " + newNightMode);
             focusMode = newFocusMode;
             isNight = newNightMode;
-            
+
             // Limpiar el timestamp de cambio de settings
             prefs.edit().remove(KEY_LAST_SETTINGS_CHANGE).apply();
-            
+
             // Activar/desactivar notificaciones según modo foco
             toggleNotifications(!newFocusMode);
-            
+
             // Aplicar tema y recrear
             applyTheme();
             safeRecreate();
             return; // Salir temprano para evitar inicializar sensores antes de recrear
         }
-        
+
         // Recargar hábitos usando Repository (sincroniza con API si hay conexión)
         loadHabitsFromRepository();
-        
+
         // Reinicializar sensores solo si están habilitados y no existen
         if (darkModeSensors && lightSensor == null) {
             android.util.Log.d("Dashboard", "onResume - Inicializando sensor de luz (dark_mode_sensors activado)");
@@ -994,7 +1038,7 @@ public class DashboardActivity extends AppCompatActivity {
                 lightSensor.start();
             }
         }
-        
+
         if (focusModeSensors && gyroSensor == null) {
             android.util.Log.d("Dashboard", "onResume - Inicializando sensor de giro (focus_mode_sensors activado)");
             gyroSensor = new GyroSensorManager(this, this::activateFocusMode);
@@ -1005,15 +1049,17 @@ public class DashboardActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+            @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 100 && grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == 100 && grantResults.length > 0
+                && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             openCameraForReading();
         } else if (requestCode == 100) {
             Toast.makeText(this, "Se necesita permiso de cámara para leer", Toast.LENGTH_SHORT).show();
         }
     }
-    
+
     /**
      * Abre la cámara para detectar páginas del hábito de leer
      * Si no existe un hábito de leer, muestra diálogo para crearlo
@@ -1027,7 +1073,7 @@ public class DashboardActivity extends AppCompatActivity {
                 break;
             }
         }
-        
+
         if (readingHabit != null) {
             // Existe hábito de leer, abrir cámara directamente
             Intent cameraIntent = new Intent(this, CameraActivity.class);
@@ -1037,18 +1083,18 @@ public class DashboardActivity extends AppCompatActivity {
         } else {
             // No existe hábito de leer, mostrar diálogo
             new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Hábito de lectura no encontrado")
-                .setMessage("No tienes un hábito de lectura configurado.\n¿Deseas crearlo ahora?")
-                .setPositiveButton("Crear hábito de leer", (dialog, which) -> {
-                    // Marcar que se debe abrir la cámara después de crear
-                    shouldOpenCameraAfterCreation = true;
-                    // Abrir selector de tipo y luego configuración
-                    Intent intent = new Intent(this, SelectHabitTypeActivity.class);
-                    intent.putExtra("auto_select_type", "READ_BOOK");
-                    startActivityForResult(intent, 500);
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
+                    .setTitle("Hábito de lectura no encontrado")
+                    .setMessage("No tienes un hábito de lectura configurado.\n¿Deseas crearlo ahora?")
+                    .setPositiveButton("Crear hábito de leer", (dialog, which) -> {
+                        // Marcar que se debe abrir la cámara después de crear
+                        shouldOpenCameraAfterCreation = true;
+                        // Abrir selector de tipo y luego configuración
+                        Intent intent = new Intent(this, SelectHabitTypeActivity.class);
+                        intent.putExtra("auto_select_type", "READ_BOOK");
+                        startActivityForResult(intent, 500);
+                    })
+                    .setNegativeButton("Cancelar", null)
+                    .show();
         }
     }
 
@@ -1059,10 +1105,10 @@ public class DashboardActivity extends AppCompatActivity {
         for (Habit habit : habits) {
             if (habit.getType() == type && !habit.isCompleted()) {
                 habit.setCompleted(true);
-                
+
                 // Actualizar en base de datos local
                 dbHelper.updateHabitCompleted(habit.getTitle(), true);
-                
+
                 // Actualizar hábito en API (marcar como completado)
                 habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
                     @Override
@@ -1075,30 +1121,33 @@ public class DashboardActivity extends AppCompatActivity {
                         android.util.Log.e("Dashboard", "Error al actualizar hábito en API: " + error);
                     }
                 });
-                
+
                 // Agregar puntos (guarda en SQLite + API)
                 int points = habit.getPoints();
-                habitRepository.addScore(habit.getId(), habit.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
-                    @Override
-                    public void onSuccess(Void data) {
-                        android.util.Log.d("Dashboard", "Score guardado: " + points + " puntos");
-                    }
+                habitRepository.addScore(habit.getId(), habit.getTitle(), points,
+                        new HabitRepository.RepositoryCallback<Void>() {
+                            @Override
+                            public void onSuccess(Void data) {
+                                android.util.Log.d("Dashboard", "Score guardado: " + points + " puntos");
+                            }
 
-                    @Override
-                    public void onError(String error) {
-                        android.util.Log.e("Dashboard", "Error al guardar score: " + error);
-                    }
-                });
-                
+                            @Override
+                            public void onError(String error) {
+                                android.util.Log.e("Dashboard", "Error al guardar score: " + error);
+                            }
+                        });
+
                 // Guardar estado inmediatamente
                 saveHabitsState();
-                
-                // Guardar evento en el mapa (excepto WALK que ya lo guarda StepSensorManager, READ lo guarda CameraActivity)
+
+                // Guardar evento en el mapa (excepto WALK que ya lo guarda StepSensorManager,
+                // READ lo guarda CameraActivity)
                 if (type == Habit.HabitType.EXERCISE) {
                     addLocationEvent("Ejercicio ✅ Completado", HabitEvent.HabitType.EXERCISE);
                 }
-                // Nota: WALK ya guarda su evento en StepSensorManager, READ lo guarda CameraActivity, DEMO lo guarda en completeDemoHabit
-                
+                // Nota: WALK ya guarda su evento en StepSensorManager, READ lo guarda
+                // CameraActivity, DEMO lo guarda en completeDemoHabit
+
                 // Actualizar UI
                 int position = habits.indexOf(habit);
                 if (position >= 0) {
@@ -1106,9 +1155,10 @@ public class DashboardActivity extends AppCompatActivity {
                 } else {
                     adapter.notifyDataSetChanged();
                 }
-                
+
                 android.util.Log.d("Dashboard", "Hábito completado: " + habit.getTitle() + " (+" + points + " puntos)");
-                Toast.makeText(this, "✅ " + habit.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "✅ " + habit.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT)
+                        .show();
                 break;
             }
         }
@@ -1137,21 +1187,21 @@ public class DashboardActivity extends AppCompatActivity {
             case WATER:
             case COLD_SHOWER:
                 startActivityForResult(new Intent(this, HabitDetailActivity.class)
-                    .putExtra("habit_id", h.getId()), 300);
+                        .putExtra("habit_id", h.getId()), 300);
                 break;
             case JOURNALING:
                 startActivityForResult(new Intent(this, JournalingActivity.class)
-                    .putExtra("habit_id", h.getId()), 301);
+                        .putExtra("habit_id", h.getId()), 301);
                 break;
             case MEDITATE:
                 startActivityForResult(new Intent(this, MeditationActivity.class)
-                    .putExtra("habit_id", h.getId()), 302);
+                        .putExtra("habit_id", h.getId()), 302);
                 break;
             case DEMO:
                 // Completar DEMO manualmente
                 h.setCompleted(true);
                 dbHelper.updateHabitCompleted(h.getTitle(), true);
-                
+
                 // Actualizar hábito en API
                 habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
                     @Override
@@ -1164,20 +1214,21 @@ public class DashboardActivity extends AppCompatActivity {
                         android.util.Log.e("Dashboard", "Error al actualizar hábito DEMO en API: " + error);
                     }
                 });
-                
+
                 // Agregar puntos (guarda en SQLite + API)
                 int points = h.getPoints();
-                habitRepository.addScore(h.getId(), h.getTitle(), points, new HabitRepository.RepositoryCallback<Void>() {
-                    @Override
-                    public void onSuccess(Void data) {
-                        android.util.Log.d("Dashboard", "Score DEMO guardado: " + points + " puntos");
-                    }
+                habitRepository.addScore(h.getId(), h.getTitle(), points,
+                        new HabitRepository.RepositoryCallback<Void>() {
+                            @Override
+                            public void onSuccess(Void data) {
+                                android.util.Log.d("Dashboard", "Score DEMO guardado: " + points + " puntos");
+                            }
 
-                    @Override
-                    public void onError(String error) {
-                        android.util.Log.e("Dashboard", "Error al guardar score DEMO: " + error);
-                    }
-                });
+                            @Override
+                            public void onError(String error) {
+                                android.util.Log.e("Dashboard", "Error al guardar score DEMO: " + error);
+                            }
+                        });
                 saveHabitsState();
                 addLocationEvent("Demo ✅ Completado", HabitEvent.HabitType.DEMO);
                 int position = habits.indexOf(h);
@@ -1186,7 +1237,8 @@ public class DashboardActivity extends AppCompatActivity {
                 } else {
                     adapter.notifyDataSetChanged();
                 }
-                Toast.makeText(this, "✅ " + h.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "✅ " + h.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT)
+                        .show();
                 break;
             default:
                 Toast.makeText(this,
@@ -1204,51 +1256,57 @@ public class DashboardActivity extends AppCompatActivity {
         intent.putExtra("habit_id", habit.getId());
         startActivityForResult(intent, 400);
     }
-    
+
     /**
      * Elimina un hábito
      */
     private void deleteHabit(Habit habit) {
         new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Eliminar Hábito")
-            .setMessage("¿Estás seguro de que quieres eliminar \"" + habit.getTitle() + "\"?")
-            .setPositiveButton("Eliminar", (dialog, which) -> {
-                // Usar habitRepository para eliminar (maneja sincronización automáticamente)
-                long habitId = habit.getId();
-                if (habitId <= 0) {
-                    // Si no tiene ID, buscar por título
-                    habitId = dbHelper.getHabitIdByTitle(habit.getTitle());
-                }
-                
-                if (habitId > 0) {
-                    habitRepository.deleteHabit(habitId, new HabitRepository.RepositoryCallback<Void>() {
-                        @Override
-                        public void onSuccess(Void data) {
-                            // Remover inmediatamente de la lista visual
-                            if (adapter != null) {
-                                adapter.removeHabit(habit);
-                            }
-                            habits.remove(habit);
-                            Toast.makeText(DashboardActivity.this, "✅ Hábito eliminado", Toast.LENGTH_SHORT).show();
-                        }
+                .setTitle("Eliminar Hábito")
+                .setMessage("¿Estás seguro de que quieres eliminar \"" + habit.getTitle() + "\"?")
+                .setPositiveButton("Eliminar", (dialog, which) -> {
+                    // Usar habitRepository para eliminar (maneja sincronización automáticamente)
+                    long habitId = habit.getId();
+                    if (habitId <= 0) {
+                        // Si no tiene ID, buscar por título
+                        habitId = dbHelper.getHabitIdByTitle(habit.getTitle());
+                    }
 
-                        @Override
-                        public void onError(String error) {
-                            android.util.Log.e("Dashboard", "Error al eliminar hábito: " + error);
-                            Toast.makeText(DashboardActivity.this, "❌ Error al eliminar el hábito", Toast.LENGTH_SHORT).show();
-                        }
-                    });
-                } else {
-                    Toast.makeText(this, "❌ No se pudo encontrar el hábito", Toast.LENGTH_SHORT).show();
-                }
-            })
-            .setNegativeButton("Cancelar", null)
-            .show();
+                    if (habitId > 0) {
+                        habitRepository.deleteHabit(habitId, new HabitRepository.RepositoryCallback<Void>() {
+                            @Override
+                            public void onSuccess(Void data) {
+                                runOnUiThread(() -> {
+                                    // Remover inmediatamente de la lista visual
+                                    if (adapter != null) {
+                                        adapter.removeHabit(habit);
+                                    }
+                                    habits.remove(habit);
+                                    Toast.makeText(DashboardActivity.this, "✅ Hábito eliminado", Toast.LENGTH_SHORT)
+                                            .show();
+                                });
+                            }
+
+                            @Override
+                            public void onError(String error) {
+                                runOnUiThread(() -> {
+                                    android.util.Log.e("Dashboard", "Error al eliminar hábito: " + error);
+                                    Toast.makeText(DashboardActivity.this, "❌ Error al eliminar el hábito",
+                                            Toast.LENGTH_SHORT).show();
+                                });
+                            }
+                        });
+                    } else {
+                        Toast.makeText(this, "❌ No se pudo encontrar el hábito", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
-    
+
     private boolean hasFineLocationPermission() {
-        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
-                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        return ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED;
     }
 
     @android.annotation.SuppressLint("MissingPermission")
@@ -1264,8 +1322,7 @@ public class DashboardActivity extends AppCompatActivity {
                             loc.getLatitude(),
                             loc.getLongitude(),
                             message,
-                            type
-                    ));
+                            type));
                 }
             });
         } catch (SecurityException se) {

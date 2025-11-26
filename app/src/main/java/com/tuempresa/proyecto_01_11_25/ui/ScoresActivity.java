@@ -1,5 +1,6 @@
 package com.tuempresa.proyecto_01_11_25.ui;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,7 +25,7 @@ public class ScoresActivity extends AppCompatActivity {
     private RecyclerView rvScores;
     private TextView txtTotalScore;
     private HabitDatabaseHelper dbHelper;
-    private ScoreAdapter adapter;
+    private RankingAdapter adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +40,8 @@ public class ScoresActivity extends AppCompatActivity {
         loadScores();
 
         // Bottom Navigation
-        com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = findViewById(R.id.bottomNavigation);
+        com.google.android.material.bottomnavigation.BottomNavigationView bottomNav = findViewById(
+                R.id.bottomNavigation);
         if (bottomNav != null) {
             bottomNav.setSelectedItemId(R.id.nav_scores);
             bottomNav.setOnItemSelectedListener(item -> {
@@ -50,6 +52,10 @@ public class ScoresActivity extends AppCompatActivity {
                     return true;
                 } else if (itemId == R.id.nav_scores) {
                     // Ya estamos en scores
+                    return true;
+                } else if (itemId == R.id.nav_profile) {
+                    startActivity(new Intent(this, ProfileActivity.class));
+                    finish();
                     return true;
                 }
                 return false;
@@ -67,49 +73,49 @@ public class ScoresActivity extends AppCompatActivity {
         int totalScore = dbHelper.getTotalScore();
         txtTotalScore.setText(String.valueOf(totalScore));
 
-        List<HabitDatabaseHelper.ScoreEntry> scores = dbHelper.getAllScores();
-        adapter = new ScoreAdapter(scores);
+        List<com.tuempresa.proyecto_01_11_25.model.UserRanking> ranking = dbHelper.getUsersRanking();
+        adapter = new RankingAdapter(ranking);
         rvScores.setAdapter(adapter);
     }
 
-    private static class ScoreAdapter extends RecyclerView.Adapter<ScoreAdapter.VH> {
-        private final List<HabitDatabaseHelper.ScoreEntry> scores;
-        private final SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault());
+    private static class RankingAdapter extends RecyclerView.Adapter<RankingAdapter.VH> {
+        private final List<com.tuempresa.proyecto_01_11_25.model.UserRanking> rankingList;
 
-        public ScoreAdapter(List<HabitDatabaseHelper.ScoreEntry> scores) {
-            this.scores = scores;
+        public RankingAdapter(List<com.tuempresa.proyecto_01_11_25.model.UserRanking> rankingList) {
+            this.rankingList = rankingList;
         }
 
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_score, parent, false);
+            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_ranking, parent, false);
             return new VH(v);
         }
 
         @Override
         public void onBindViewHolder(@NonNull VH holder, int position) {
-            HabitDatabaseHelper.ScoreEntry entry = scores.get(position);
-            holder.txtHabitTitle.setText(entry.getHabitTitle());
-            holder.txtScorePoints.setText("+" + entry.getPoints());
-            holder.txtScoreDate.setText(dateFormat.format(new Date(entry.getDate() * 1000)));
+            com.tuempresa.proyecto_01_11_25.model.UserRanking item = rankingList.get(position);
+            holder.tvRankPosition.setText("#" + (position + 1));
+            holder.tvUserName.setText(item.getUserName());
+            holder.tvHabitsCount.setText(item.getHabitsCompletedCount() + " hábitos completados");
+            holder.tvTotalScore.setText(item.getTotalScore() + " pts");
         }
 
         @Override
         public int getItemCount() {
-            return scores.size();
+            return rankingList.size();
         }
 
         static class VH extends RecyclerView.ViewHolder {
-            TextView txtHabitTitle, txtScorePoints, txtScoreDate;
+            TextView tvRankPosition, tvUserName, tvHabitsCount, tvTotalScore;
 
             VH(@NonNull View v) {
                 super(v);
-                txtHabitTitle = v.findViewById(R.id.txtHabitTitle);
-                txtScorePoints = v.findViewById(R.id.txtScorePoints);
-                txtScoreDate = v.findViewById(R.id.txtScoreDate);
+                tvRankPosition = v.findViewById(R.id.tvRankPosition);
+                tvUserName = v.findViewById(R.id.tvUserName);
+                tvHabitsCount = v.findViewById(R.id.tvHabitsCount);
+                tvTotalScore = v.findViewById(R.id.tvTotalScore);
             }
         }
     }
 }
-

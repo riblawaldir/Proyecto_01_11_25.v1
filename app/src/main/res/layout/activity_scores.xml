@@ -1,106 +1,95 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="@drawable/bg_gradient_orange"
+    tools:context=".ui.ScoresActivity">
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="220dp"
-        android:background="@drawable/bg_header_curve" />
+    <TextView
+        android:id="@+id/tvScoresTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:layout_marginStart="24dp"
+        android:text="Ranking Global"
+        android:textColor="@color/white"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Header con puntaje total -->
-    <LinearLayout
-        android:id="@+id/headerContainer"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardTotalScore"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingTop="40dp"
-        android:paddingBottom="30dp">
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/total_score"
-            android:textSize="16sp"
-            android:textColor="#CCFFFFFF"
-            android:layout_marginBottom="8dp" />
-
-        <TextView
-            android:id="@+id/txtTotalScore"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="0"
-            android:textSize="64sp"
-            android:fontFamily="sans-serif-black"
-            android:textColor="@android:color/white"
-            android:shadowColor="#40000000"
-            android:shadowDx="0"
-            android:shadowDy="4"
-            android:shadowRadius="8" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Puntos Totales"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:background="@drawable/drawable_gradient_orange"
-            android:backgroundTint="#33FFFFFF"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="4dp"
-            android:textColor="@color/white"
-            android:layout_marginTop="8dp"/>
-    </LinearLayout>
-
-    <!-- Lista de puntajes en tarjeta redondeada hacia arriba -->
-    <com.google.android.material.card.MaterialCardView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/headerContainer"
-        android:layout_above="@id/bottomNavigation"
-        android:layout_marginTop="-20dp"
-        android:layout_marginHorizontal="12dp"
-        app:cardCornerRadius="20dp"
+        android:layout_margin="24dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardCornerRadius="16dp"
         app:cardElevation="4dp"
-        app:cardBackgroundColor="@color/white">
+        app:layout_constraintTop_toBottomOf="@id/tvScoresTitle">
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical">
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="24dp"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:layout_width="match_parent"
+            <ImageView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_fitness_center_24"
+                app:tint="@color/orangePrimary"/>
+
+            <LinearLayout
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:text="Historial de Logros"
-                android:padding="20dp"
-                android:textStyle="bold"
-                android:textColor="@color/textDark"
-                android:textSize="18sp"/>
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rvScores"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:paddingHorizontal="@dimen/padding_medium"
-                android:clipToPadding="false" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tu Puntaje Total"
+                    android:textColor="@color/orangeDark"
+                    android:textSize="14sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/txtTotalScore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="@color/orangePrimary"
+                    android:textSize="32sp"
+                    android:textStyle="bold"/>
+            </LinearLayout>
         </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
-    </com.google.android.material.card.MaterialCardView>
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvScores"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="16dp"
+        android:padding="16dp"
+        android:clipToPadding="false"
+        app:layout_constraintBottom_toTopOf="@+id/bottomNavigation"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/cardTotalScore" />
 
-    <!-- Bottom Navigation -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottomNavigation"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
         android:background="@color/white"
-        android:elevation="16dp"
-        app:menu="@menu/bottom_navigation"
-        app:itemIconTint="@color/orangeEnd"
-        app:itemTextColor="@color/orangeEnd" />
+        app:itemIconTint="@color/orangePrimary"
+        app:itemTextColor="@color/orangePrimary"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:menu="@menu/bottom_navigation" />
 
-</RelativeLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

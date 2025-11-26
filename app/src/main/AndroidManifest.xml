@@ -37,10 +37,15 @@
         <activity android:name=".ui.MapActivity"/>
         <activity android:name=".ui.SettingsActivity" />
         <activity android:name=".ui.ScoresActivity" />
+        <activity android:name=".ui.ProfileActivity" />
         <activity 
             android:name=".ui.CameraActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Proyecto_01_11_25"/>
+
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="YOUR_API_KEY_HERE" />
 
 
     </application>
