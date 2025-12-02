@@ -334,9 +334,9 @@ public class SettingsActivity extends AppCompatActivity {
                 logoutDesc.setLayoutParams(logoutDescParams);
                 cardContent.addView(logoutDesc);
                 
-                // Botón de eliminar cuenta
+                // Botón de borrar cuenta
                 com.google.android.material.button.MaterialButton btnDelete = new com.google.android.material.button.MaterialButton(this);
-                btnDelete.setText("Eliminar Cuenta");
+                btnDelete.setText("Borrar Cuenta");
                 btnDelete.setTextColor(getResources().getColor(android.R.color.white));
                 btnDelete.setBackgroundColor(0xFFD32F2F); // Rojo
                 btnDelete.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
@@ -344,11 +344,12 @@ public class SettingsActivity extends AppCompatActivity {
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
                 );
+                deleteParams.setMargins(0, 0, 0, 0);
                 btnDelete.setLayoutParams(deleteParams);
                 btnDelete.setOnClickListener(v -> deleteAccount());
                 cardContent.addView(btnDelete);
                 
-                // Texto descriptivo delete
+                // Texto descriptivo borrar cuenta
                 android.widget.TextView deleteDesc = new android.widget.TextView(this);
                 deleteDesc.setText("⚠️ Esta acción es permanente. Se eliminarán todos tus datos y no podrás recuperarlos.");
                 deleteDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
@@ -358,9 +359,68 @@ public class SettingsActivity extends AppCompatActivity {
                     android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
                     android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
                 );
-                deleteDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, 0);
+                deleteDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, (int) (16 * getResources().getDisplayMetrics().density));
                 deleteDesc.setLayoutParams(deleteDescParams);
                 cardContent.addView(deleteDesc);
+                
+                // Botón de borrar todos los hábitos
+                com.google.android.material.button.MaterialButton btnDeleteAllHabits = new com.google.android.material.button.MaterialButton(this);
+                btnDeleteAllHabits.setText("Borrar Todos los Hábitos");
+                btnDeleteAllHabits.setTextColor(getResources().getColor(android.R.color.white));
+                btnDeleteAllHabits.setBackgroundColor(0xFFFF9800); // Naranja oscuro
+                btnDeleteAllHabits.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
+                android.widget.LinearLayout.LayoutParams deleteHabitsParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                deleteHabitsParams.setMargins(0, 0, 0, 0);
+                btnDeleteAllHabits.setLayoutParams(deleteHabitsParams);
+                btnDeleteAllHabits.setOnClickListener(v -> deleteAllHabits());
+                cardContent.addView(btnDeleteAllHabits);
+                
+                // Texto descriptivo borrar hábitos
+                android.widget.TextView deleteHabitsDesc = new android.widget.TextView(this);
+                deleteHabitsDesc.setText("Elimina todos tus hábitos. Esta acción es permanente y no podrás recuperarlos.");
+                deleteHabitsDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+                deleteHabitsDesc.setTextColor(0xFFFF9800); // Naranja
+                deleteHabitsDesc.setGravity(android.view.Gravity.CENTER);
+                android.widget.LinearLayout.LayoutParams deleteHabitsDescParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                deleteHabitsDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, (int) (16 * getResources().getDisplayMetrics().density));
+                deleteHabitsDesc.setLayoutParams(deleteHabitsDescParams);
+                cardContent.addView(deleteHabitsDesc);
+                
+                // Botón de limpiar base de datos local
+                com.google.android.material.button.MaterialButton btnClearLocalDB = new com.google.android.material.button.MaterialButton(this);
+                btnClearLocalDB.setText("Limpiar Datos Locales");
+                btnClearLocalDB.setTextColor(getResources().getColor(R.color.orange));
+                btnClearLocalDB.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                btnClearLocalDB.setStrokeColor(getResources().getColorStateList(R.color.orange));
+                btnClearLocalDB.setStrokeWidth((int) (2 * getResources().getDisplayMetrics().density));
+                btnClearLocalDB.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
+                android.widget.LinearLayout.LayoutParams clearDBParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                btnClearLocalDB.setLayoutParams(clearDBParams);
+                btnClearLocalDB.setOnClickListener(v -> clearLocalDatabase());
+                cardContent.addView(btnClearLocalDB);
+                
+                // Texto descriptivo clear DB
+                android.widget.TextView clearDBDesc = new android.widget.TextView(this);
+                clearDBDesc.setText("Elimina todos los datos guardados localmente. Los datos se sincronizarán desde la API cuando vuelvas a conectarte.");
+                clearDBDesc.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12);
+                clearDBDesc.setTextColor(getResources().getColor(R.color.textLight));
+                clearDBDesc.setGravity(android.view.Gravity.CENTER);
+                android.widget.LinearLayout.LayoutParams clearDBDescParams = new android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                );
+                clearDBDescParams.setMargins(0, (int) (8 * getResources().getDisplayMetrics().density), 0, 0);
+                clearDBDesc.setLayoutParams(clearDBDescParams);
+                cardContent.addView(clearDBDesc);
                 
                 card.addView(cardContent);
                 contentLayout.addView(card);
@@ -467,6 +527,121 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             Toast.makeText(this, "Error al eliminar la cuenta", Toast.LENGTH_LONG).show();
         }
+    }
+    
+    private void deleteAllHabits() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("⚠️ Borrar Todos los Hábitos")
+                .setMessage("¿Estás seguro de que deseas eliminar TODOS tus hábitos?\n\n" +
+                        "Esta acción es PERMANENTE y eliminará:\n" +
+                        "• Todos tus hábitos\n" +
+                        "• Todo el progreso asociado\n" +
+                        "• Todas las entradas de diario relacionadas\n\n" +
+                        "No podrás recuperar esta información.")
+                .setPositiveButton("Sí, borrar todo", (dialog, which) -> {
+                    // Confirmación adicional
+                    new android.app.AlertDialog.Builder(this)
+                            .setTitle("Última confirmación")
+                            .setMessage("¿Realmente deseas eliminar todos tus hábitos? Esta acción no se puede deshacer.")
+                            .setPositiveButton("Eliminar definitivamente", (dialog2, which2) -> {
+                                performDeleteAllHabits();
+                            })
+                            .setNegativeButton("Cancelar", null)
+                            .show();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+    
+    private void performDeleteAllHabits() {
+        try {
+            com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+                    new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+            long userId = sessionManager.getUserId();
+            
+            com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                    new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(this);
+            
+            // Obtener todos los hábitos del usuario
+            java.util.List<com.tuempresa.proyecto_01_11_25.model.Habit> habits = dbHelper.getAllHabits();
+            
+            // Eliminar cada hábito
+            int deletedCount = 0;
+            for (com.tuempresa.proyecto_01_11_25.model.Habit habit : habits) {
+                boolean deleted = dbHelper.deleteHabit(habit.getId());
+                if (deleted) {
+                    deletedCount++;
+                }
+            }
+            
+            // Capturar el valor final para usar en la clase interna
+            final int finalDeletedCount = deletedCount;
+            
+            // También intentar eliminar desde la API si hay conexión
+            com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor connectionMonitor = 
+                    com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor.getInstance(this);
+            if (connectionMonitor.isConnected()) {
+                // La sincronización se encargará de eliminar en el servidor
+                com.tuempresa.proyecto_01_11_25.sync.SyncManager syncManager = 
+                        com.tuempresa.proyecto_01_11_25.sync.SyncManager.getInstance(this);
+                syncManager.syncAll(new com.tuempresa.proyecto_01_11_25.sync.SyncManager.SyncListener() {
+                    @Override
+                    public void onSyncStarted() {
+                        Toast.makeText(SettingsActivity.this, "Sincronizando eliminaciones...", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onSyncCompleted(int syncedCount) {
+                        Toast.makeText(SettingsActivity.this, "✅ " + finalDeletedCount + " hábitos eliminados", Toast.LENGTH_LONG).show();
+                        finish(); // Cerrar SettingsActivity para que se recargue el Dashboard
+                    }
+
+                    @Override
+                    public void onSyncError(String error) {
+                        Toast.makeText(SettingsActivity.this, "✅ " + finalDeletedCount + " hábitos eliminados localmente. Error al sincronizar: " + error, Toast.LENGTH_LONG).show();
+                        finish();
+                    }
+                });
+            } else {
+                Toast.makeText(this, "✅ " + finalDeletedCount + " hábitos eliminados. Se sincronizarán al reconectar.", Toast.LENGTH_LONG).show();
+                finish();
+            }
+            
+            dbHelper.close();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error al eliminar hábitos: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            android.util.Log.e("SettingsActivity", "Error al eliminar hábitos", e);
+        }
+    }
+    
+    private void clearLocalDatabase() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Limpiar Datos Locales")
+                .setMessage("¿Estás seguro de que deseas eliminar todos los datos guardados localmente?\n\n" +
+                        "Esto eliminará:\n" +
+                        "• Todos los hábitos guardados localmente\n" +
+                        "• Todos los puntajes guardados localmente\n" +
+                        "• Todas las entradas de diario guardadas localmente\n\n" +
+                        "Los datos se sincronizarán automáticamente desde la API cuando vuelvas a conectarte.")
+                .setPositiveButton("Sí, limpiar", (dialog, which) -> {
+                    try {
+                        // Eliminar base de datos local
+                        com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelperSync.deleteLocalDatabase(this);
+                        
+                        // Limpiar flag de SharedPreferences
+                        SharedPreferences appPrefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE);
+                        appPrefs.edit().putBoolean("local_db_deleted", false).apply();
+                        
+                        Toast.makeText(this, "✅ Datos locales eliminados. La app se sincronizará desde la API.", Toast.LENGTH_LONG).show();
+                        
+                        // Cerrar SettingsActivity y volver al Dashboard para que se recarguen los datos
+                        finish();
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Error al limpiar datos: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 }
 

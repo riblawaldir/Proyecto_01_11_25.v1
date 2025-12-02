@@ -10,8 +10,14 @@
     <string name="view_map">Ver mapa de logros</string>
     <string name="open_camera">Abrir cámara para leer</string>
     <string name="connection_status">Estado de conexión</string>
-    <string name="connection_online">Conectado a la API</string>
-    <string name="connection_offline">Modo offline (SQLite)</string>
+    <string name="connection_online">Conectado a internet</string>
+    <string name="connection_offline">Sin conexión a internet</string>
+    
+    <!-- Offline Dialog -->
+    <string name="offline_title">Sin conexión a internet</string>
+    <string name="offline_message">Estás sin conexión a internet. La aplicación funcionará de manera offline y tu progreso se actualizará al momento que vuelvas a conectarte.</string>
+    <string name="offline_ok_button">Entendido</string>
+    <string name="offline_icon">Sin conexión</string>
     
     <!-- Create Habit -->
     <string name="create_habit_title">Crear Nuevo Hábito</string>

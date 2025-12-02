@@ -73,7 +73,7 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         // Agregar columnas de sincronización a la tabla habits
         addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SYNCED, "INTEGER DEFAULT 0");
         addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SERVER_ID, "INTEGER");
-        addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT (strftime('%s', 'now'))");
+        addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT 0");
 
         // Crear tabla de operaciones pendientes
         String createPendingOpsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_PENDING_OPERATIONS + " (" +
@@ -99,7 +99,7 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         // Agregar columnas de sincronización si no existen (para bases de datos existentes)
         addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SYNCED, "INTEGER DEFAULT 0");
         addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SERVER_ID, "INTEGER");
-        addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT (strftime('%s', 'now'))");
+        addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT 0");
 
         // Crear tabla de operaciones pendientes si no existe
         String createPendingOpsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_PENDING_OPERATIONS + " (" +
@@ -153,20 +153,47 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
 
     /**
      * Asegura que las columnas de sincronización existan
+     * Este método se ejecuta automáticamente antes de cualquier operación que use estas columnas
      */
     private void ensureSyncColumns(SQLiteDatabase db) {
-        if (!columnExists(db, TABLE_HABITS, COLUMN_HABIT_SYNCED)) {
+        try {
+            // Siempre intentar agregar las columnas (addColumnIfNotExists verifica internamente)
+            // Esto es más seguro que confiar solo en columnExists
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SYNCED, "INTEGER DEFAULT 0");
-            Log.d(TAG, "Columna 'synced' agregada");
-        }
-        if (!columnExists(db, TABLE_HABITS, COLUMN_HABIT_SERVER_ID)) {
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SERVER_ID, "INTEGER");
-            Log.d(TAG, "Columna 'server_id' agregada");
+            addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT 0");
+            Log.d(TAG, "Columnas de sincronización verificadas");
+        } catch (Exception e) {
+            Log.e(TAG, "Error al asegurar columnas de sincronización", e);
+            // Intentar agregar las columnas de todas formas
+            try {
+                addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SYNCED, "INTEGER DEFAULT 0");
+                addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_SERVER_ID, "INTEGER");
+                addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT 0");
+            } catch (Exception e2) {
+                Log.e(TAG, "Error crítico al agregar columnas de sincronización", e2);
+            }
         }
-        if (!columnExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT)) {
-            addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_UPDATED_AT, "INTEGER DEFAULT (strftime('%s', 'now'))");
-            Log.d(TAG, "Columna 'updated_at' agregada");
-        }
+    }
+    
+    /**
+     * Obtiene la base de datos de escritura asegurando que las columnas de sincronización existan
+     */
+    @Override
+    public SQLiteDatabase getWritableDatabase() {
+        SQLiteDatabase db = super.getWritableDatabase();
+        ensureSyncColumns(db);
+        return db;
+    }
+    
+    /**
+     * Obtiene la base de datos de lectura asegurando que las columnas de sincronización existan
+     */
+    @Override
+    public SQLiteDatabase getReadableDatabase() {
+        SQLiteDatabase db = super.getReadableDatabase();
+        ensureSyncColumns(db);
+        return db;
     }
 
     /**
@@ -255,7 +282,8 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
             } while (cursor.moveToNext());
         }
         cursor.close();
-        db.close();
+        // NO cerrar db aquí - HabitDatabaseHelper maneja la conexión automáticamente
+        // db.close(); // ELIMINADO: causa "attempt to re-open an already-closed object"
         return habits;
     }
 
@@ -264,13 +292,30 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
      */
     public void markHabitAsSynced(long localId, long serverId) {
         SQLiteDatabase db = this.getWritableDatabase();
+        // ensureSyncColumns ya se ejecuta en getWritableDatabase(), pero lo llamamos de nuevo por seguridad
         ensureSyncColumns(db);
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_HABIT_SYNCED, 1);
-        values.put(COLUMN_HABIT_SERVER_ID, serverId);
-        values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
-        db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
-        db.close();
+        try {
+            ContentValues values = new ContentValues();
+            values.put(COLUMN_HABIT_SYNCED, 1);
+            values.put(COLUMN_HABIT_SERVER_ID, serverId);
+            values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
+            db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
+        } catch (Exception e) {
+            Log.e(TAG, "Error al marcar hábito como sincronizado", e);
+            // Si falla, intentar agregar las columnas y reintentar
+            ensureSyncColumns(db);
+            try {
+                ContentValues values = new ContentValues();
+                values.put(COLUMN_HABIT_SYNCED, 1);
+                values.put(COLUMN_HABIT_SERVER_ID, serverId);
+                values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
+                db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
+            } catch (Exception e2) {
+                Log.e(TAG, "Error crítico al marcar hábito como sincronizado", e2);
+            }
+        } finally {
+            db.close();
+        }
     }
 
     /**
@@ -278,12 +323,28 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
      */
     public void markHabitAsUnsynced(long localId) {
         SQLiteDatabase db = this.getWritableDatabase();
+        // ensureSyncColumns ya se ejecuta en getWritableDatabase(), pero lo llamamos de nuevo por seguridad
         ensureSyncColumns(db);
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_HABIT_SYNCED, 0);
-        values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
-        db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
-        db.close();
+        try {
+            ContentValues values = new ContentValues();
+            values.put(COLUMN_HABIT_SYNCED, 0);
+            values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
+            db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
+        } catch (Exception e) {
+            Log.e(TAG, "Error al marcar hábito como no sincronizado", e);
+            // Si falla, intentar agregar las columnas y reintentar
+            ensureSyncColumns(db);
+            try {
+                ContentValues values = new ContentValues();
+                values.put(COLUMN_HABIT_SYNCED, 0);
+                values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
+                db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(localId)});
+            } catch (Exception e2) {
+                Log.e(TAG, "Error crítico al marcar hábito como no sincronizado", e2);
+            }
+        } finally {
+            db.close();
+        }
     }
 
     /**
@@ -326,13 +387,45 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
     /**
      * Actualiza o inserta un hábito desde el servidor
      * Verifica si existe por serverId, si existe actualiza, si no inserta
+     * También busca hábitos locales sin serverId que coincidan para evitar duplicados
      */
     public long upsertHabitFromServer(Habit habit, long serverId) {
         SQLiteDatabase db = this.getWritableDatabase();
         ensureSyncColumns(db);
         
-        // Verificar si ya existe por serverId (pasar db para no cerrarla)
+        // Obtener el userId actual del usuario logueado
+        long currentUserId = getCurrentUserId();
+        
+        // 1. Verificar si ya existe por serverId (pasar db para no cerrarla)
         Habit existing = getHabitByServerId(serverId, db);
+        
+        // 2. Si no existe por serverId, buscar hábitos locales sin serverId que coincidan
+        // Esto evita crear duplicados cuando un hábito local se sube al servidor
+        if (existing == null) {
+            // Buscar hábitos locales sin serverId que tengan el mismo título y tipo
+            // y pertenezcan al usuario actual
+            String selection = COLUMN_HABIT_SERVER_ID + " IS NULL AND " +
+                              COLUMN_HABIT_TITLE + "=? AND " +
+                              COLUMN_HABIT_TYPE + "=? AND " +
+                              COLUMN_HABIT_USER_ID + "=?";
+            String[] selectionArgs = new String[]{
+                habit.getTitle(),
+                habit.getType().name(),
+                String.valueOf(currentUserId)
+            };
+            
+            Cursor cursor = db.query(TABLE_HABITS, null, selection, selectionArgs, null, null, null, "1");
+            if (cursor != null && cursor.moveToFirst()) {
+                // Encontrar un hábito local sin serverId que coincide
+                long localId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_HABIT_ID));
+                // Obtener el hábito completo usando cursorToHabit
+                existing = cursorToHabit(cursor);
+                cursor.close();
+                Log.d(TAG, "Encontrado hábito local sin serverId que coincide: " + existing.getTitle() + " (localId: " + localId + ")");
+            } else if (cursor != null) {
+                cursor.close();
+            }
+        }
         
         ContentValues values = new ContentValues();
         values.put(COLUMN_HABIT_TITLE, habit.getTitle());
@@ -356,15 +449,19 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         if (habit.getCodingMode() != null) values.put(COLUMN_HABIT_CODING_MODE, habit.getCodingMode() ? 1 : 0);
         if (habit.getHabitIcon() != null) values.put(COLUMN_HABIT_ICON, habit.getHabitIcon());
         
+        // IMPORTANTE: Establecer el userId del usuario actual
+        values.put(COLUMN_HABIT_USER_ID, currentUserId);
+        
         values.put(COLUMN_HABIT_SYNCED, 1);
         values.put(COLUMN_HABIT_SERVER_ID, serverId);
         values.put(COLUMN_HABIT_UPDATED_AT, System.currentTimeMillis() / 1000);
         
         long id;
         if (existing != null) {
-            // Actualizar existente
+            // Actualizar existente (ya sea por serverId o por coincidencia local)
             id = existing.getId();
             db.update(TABLE_HABITS, values, COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(id)});
+            Log.d(TAG, "Hábito actualizado desde servidor: " + habit.getTitle() + " (localId: " + id + ", serverId: " + serverId + ")");
         } else {
             // Insertar nuevo usando insertHabitFull
             id = insertHabitFull(
@@ -390,6 +487,7 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
             );
             // Marcar como sincronizado
             markHabitAsSynced(id, serverId);
+            Log.d(TAG, "Hábito nuevo insertado desde servidor: " + habit.getTitle() + " (localId: " + id + ", serverId: " + serverId + ")");
         }
         
         db.close();

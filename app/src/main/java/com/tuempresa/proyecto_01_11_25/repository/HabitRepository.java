@@ -11,6 +11,7 @@ import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.model.Score;
 import com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor;
 import com.tuempresa.proyecto_01_11_25.sync.SyncManager;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -32,6 +33,7 @@ public class  HabitRepository {
     private final SyncManager syncManager;
     private final ExecutorService executorService;
     private final Gson gson;
+    private final SessionManager sessionManager;
 
     public interface RepositoryCallback<T> {
         void onSuccess(T data);
@@ -41,12 +43,13 @@ public class  HabitRepository {
     private HabitRepository(Context context) {
         this.context = context.getApplicationContext();
         this.dbHelper = new HabitDatabaseHelperSync(context);
-        this.apiHelper = new HabitApiHelper();
-        this.scoreApiHelper = new ScoreApiHelper();
+        this.apiHelper = new HabitApiHelper(context);
+        this.scoreApiHelper = new ScoreApiHelper(context);
         this.connectionMonitor = ConnectionMonitor.getInstance(context);
         this.syncManager = SyncManager.getInstance(context);
         this.executorService = Executors.newSingleThreadExecutor();
         this.gson = new Gson();
+        this.sessionManager = new SessionManager(context);
         
         // Agregar listener para sincronización automática cuando se restaure la conexión
         this.connectionMonitor.addListener(new ConnectionMonitor.ConnectionListener() {
@@ -142,6 +145,12 @@ public class  HabitRepository {
     public void createHabit(Habit habit, RepositoryCallback<Habit> callback) {
         executorService.execute(() -> {
             try {
+                // Agregar userId antes de guardar
+                long userId = sessionManager.getUserId();
+                if (userId > 0) {
+                    habit.setUserId(userId);
+                }
+                
                 // 1. Guardar en base de datos local (SQLite)
                 long localId = dbHelper.insertHabitFull(
                     habit.getTitle(),
@@ -288,6 +297,17 @@ public class  HabitRepository {
     }
 
     private void syncHabitToServer(Habit habit, long localId, RepositoryCallback<Habit> callback) {
+        // CRÍTICO: Asegurar que el userId esté establecido antes de enviar al servidor
+        long userId = sessionManager.getUserId();
+        if (userId > 0) {
+            habit.setUserId(userId);
+            Log.d(TAG, "Sincronizando hábito con userId: " + userId);
+        } else {
+            Log.e(TAG, "⚠️ No se puede sincronizar: userId no válido (" + userId + ")");
+            callback.onError("Usuario no autenticado");
+            return;
+        }
+        
         Long serverId = dbHelper.getServerId(localId);
         
         if (serverId != null && serverId > 0) {
@@ -388,6 +408,11 @@ public class  HabitRepository {
                 // 2. Si hay conexión y el hábito tiene serverId, sincronizar con servidor
                 if (connectionMonitor.isConnected() && serverHabitId != null && serverHabitId > 0) {
                     Score score = new Score(serverHabitId, habitTitle, points);
+                    // Agregar userId al score
+                    long userId = sessionManager.getUserId();
+                    if (userId > 0) {
+                        score.setUserId(userId);
+                    }
                     scoreApiHelper.createScore(score, new ScoreApiHelper.OnScoreSavedListener() {
                         @Override
                         public void onSuccess(Score createdScore) {

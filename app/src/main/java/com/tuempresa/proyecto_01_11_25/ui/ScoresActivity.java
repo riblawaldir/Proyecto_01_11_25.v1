@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -24,7 +25,10 @@ public class ScoresActivity extends AppCompatActivity {
 
     private RecyclerView rvScores;
     private TextView txtTotalScore;
+    private TextView txtCurrentStreak;
+    private TextView txtStreakInfo;
     private HabitDatabaseHelper dbHelper;
+    private SessionManager sessionManager;
     private RankingAdapter adapter;
 
     @Override
@@ -33,7 +37,10 @@ public class ScoresActivity extends AppCompatActivity {
         setContentView(R.layout.activity_scores);
 
         dbHelper = new HabitDatabaseHelper(this);
+        sessionManager = new SessionManager(this);
         txtTotalScore = findViewById(R.id.txtTotalScore);
+        txtCurrentStreak = findViewById(R.id.txtCurrentStreak);
+        txtStreakInfo = findViewById(R.id.txtStreakInfo);
         rvScores = findViewById(R.id.rvScores);
 
         rvScores.setLayoutManager(new LinearLayoutManager(this));
@@ -47,14 +54,18 @@ public class ScoresActivity extends AppCompatActivity {
             bottomNav.setOnItemSelectedListener(item -> {
                 int itemId = item.getItemId();
                 if (itemId == R.id.nav_dashboard) {
-                    startActivity(new android.content.Intent(this, DashboardActivity.class));
+                    Intent intent = new Intent(this, DashboardActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(intent);
                     finish();
                     return true;
                 } else if (itemId == R.id.nav_scores) {
                     // Ya estamos en scores
                     return true;
                 } else if (itemId == R.id.nav_profile) {
-                    startActivity(new Intent(this, ProfileActivity.class));
+                    Intent intent = new Intent(this, ProfileActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(intent);
                     finish();
                     return true;
                 }
@@ -72,6 +83,24 @@ public class ScoresActivity extends AppCompatActivity {
     private void loadScores() {
         int totalScore = dbHelper.getTotalScore();
         txtTotalScore.setText(String.valueOf(totalScore));
+
+        // Cargar racha actual
+        int currentStreak = dbHelper.getCurrentStreak();
+        long userId = sessionManager.getUserId();
+        int dailyHabitsCompleted = dbHelper.getDailyHabitsCompleted(userId);
+        
+        if (currentStreak > 0) {
+            txtCurrentStreak.setText(currentStreak + " día" + (currentStreak > 1 ? "s" : ""));
+            txtStreakInfo.setText("¡Sigue así! Completa 3 hábitos hoy para mantener tu racha.");
+        } else {
+            txtCurrentStreak.setText("Sin racha");
+            if (dailyHabitsCompleted >= 3) {
+                txtStreakInfo.setText("¡Completaste 3 hábitos! Tu racha comenzará mañana.");
+            } else {
+                int remaining = 3 - dailyHabitsCompleted;
+                txtStreakInfo.setText("Completa " + remaining + " hábito" + (remaining > 1 ? "s más" : " más") + " para iniciar tu racha.");
+            }
+        }
 
         List<com.tuempresa.proyecto_01_11_25.model.UserRanking> ranking = dbHelper.getUsersRanking();
         adapter = new RankingAdapter(ranking);

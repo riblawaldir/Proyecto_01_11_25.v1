@@ -95,14 +95,7 @@ public class BackupManager {
                     return;
                 }
 
-                // Restaurar datos
-                // Nota: Esto podría duplicar datos si no se limpia antes. 
-                // Por seguridad, vamos a intentar insertar/actualizar.
-                // O idealmente, preguntar al usuario si quiere reemplazar o fusionar.
-                // Para esta implementación simple, vamos a insertar como nuevos si no existen (por título)
-                // O mejor, para una restauración completa, podríamos borrar todo? 
-                // RNF-14 dice "recuperar la información... para restaurar su progreso".
-                // Vamos a asumir una estrategia de "Merge Inteligente":
+                // Restaurar datos usando estrategia de "Merge Inteligente":
                 // Si el hábito existe (por título), actualizamos. Si no, creamos.
                 
                 int habitsRestored = 0;
@@ -131,20 +124,10 @@ public class BackupManager {
                 }
 
                 // Restaurar Scores
-                // Simplemente agregamos los scores. Podría haber duplicados si se importa dos veces.
-                // Una mejora sería verificar si ya existe un score para ese hábito en esa fecha.
-                // Por ahora, insertamos.
+                // TODO: Mejorar HabitDatabaseHelper para permitir insertar scores con fecha original
+                // Actualmente addScore usa fecha actual, perdiendo la fecha original del backup
                 if (backupData.scores != null) {
                     for (HabitDatabaseHelper.ScoreEntry score : backupData.scores) {
-                        // Solo insertar si tenemos el título (que es lo que usa addScore, aunque addScore crea uno nuevo con fecha actual)
-                        // Necesitamos un método en dbHelper para insertar score histórico o modificar addScore.
-                        // Como addScore usa "now", vamos a tener que insertar manualmente o agregar método.
-                        // Por simplicidad y dado que HabitDatabaseHelper.ScoreEntry es solo lectura en la clase interna,
-                        // vamos a usar addScore pero perderemos la fecha original si no modificamos el helper.
-                        // IMPORTANTE: RNF-04 Historial. Perder la fecha es malo.
-                        // Deberíamos agregar un método insertScoreWithDate en DbHelper.
-                        // Por ahora, usaremos addScore que pone fecha actual, lo cual es una limitación.
-                        // TODO: Mejorar HabitDatabaseHelper para permitir insertar scores con fecha.
                         dbHelper.addScore(score.getHabitTitle(), score.getPoints());
                     }
                 }

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-feature android:name="android.hardware.camera" android:required="true"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
@@ -28,16 +31,24 @@
             </intent-filter>
         </activity>
         <activity android:name=".ui.RegisterActivity" />
-        <activity android:name=".ui.DashboardActivity" android:exported="false" />
+        <activity 
+            android:name=".ui.DashboardActivity" 
+            android:exported="false"
+            android:launchMode="singleTop" />
         <activity android:name=".ui.SelectHabitTypeActivity" />
         <activity android:name=".ui.ConfigureHabitActivity" />
         <activity android:name=".ui.HabitDetailActivity" />
         <activity android:name=".ui.JournalingActivity" />
         <activity android:name=".ui.MeditationActivity" />
+        <activity android:name=".ui.HabitJournalHistoryActivity" />
         <activity android:name=".ui.MapActivity"/>
         <activity android:name=".ui.SettingsActivity" />
-        <activity android:name=".ui.ScoresActivity" />
-        <activity android:name=".ui.ProfileActivity" />
+        <activity 
+            android:name=".ui.ScoresActivity"
+            android:launchMode="singleTop" />
+        <activity 
+            android:name=".ui.ProfileActivity"
+            android:launchMode="singleTop" />
         <activity 
             android:name=".ui.CameraActivity"
             android:screenOrientation="portrait"
@@ -47,6 +58,10 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="YOUR_API_KEY_HERE" />
 
+        <receiver
+            android:name=".utils.ReminderReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
     </application>
 

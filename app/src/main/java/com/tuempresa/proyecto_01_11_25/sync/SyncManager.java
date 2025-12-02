@@ -27,8 +27,11 @@ public class SyncManager {
     private final ConnectionMonitor connectionMonitor;
     private final ExecutorService executorService;
     private final Gson gson;
+    private final com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager;
     
     private boolean isSyncing = false;
+    private final java.util.concurrent.locks.ReentrantLock syncLock = new java.util.concurrent.locks.ReentrantLock();
+    private SyncListener currentSyncListener;
 
     public interface SyncListener {
         void onSyncStarted();
@@ -39,10 +42,11 @@ public class SyncManager {
     private SyncManager(Context context) {
         this.context = context.getApplicationContext();
         this.dbHelper = new HabitDatabaseHelperSync(context);
-        this.apiHelper = new HabitApiHelper();
+        this.apiHelper = new HabitApiHelper(context); // Pasar context para inicializar correctamente
         this.connectionMonitor = ConnectionMonitor.getInstance(context);
         this.executorService = Executors.newSingleThreadExecutor();
         this.gson = new Gson();
+        this.sessionManager = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(context);
     }
 
     public static synchronized SyncManager getInstance(Context context) {
@@ -54,53 +58,80 @@ public class SyncManager {
 
     /**
      * Sincroniza todos los datos pendientes con el servidor.
+     * Previene múltiples sincronizaciones simultáneas usando un lock.
      */
     public void syncAll(SyncListener listener) {
-        if (isSyncing) {
-            Log.d(TAG, "Sincronización ya en progreso");
-            return;
-        }
-
-        if (!connectionMonitor.isConnected()) {
-            Log.d(TAG, "Sin conexión a la API, no se puede sincronizar");
+        // Intentar adquirir el lock (no bloqueante)
+        if (!syncLock.tryLock()) {
+            Log.d(TAG, "Sincronización ya en progreso, ignorando nueva solicitud");
             if (listener != null) {
-                listener.onSyncError("Sin conexión a la API");
+                listener.onSyncError("Sincronización ya en progreso");
             }
             return;
         }
 
-        executorService.execute(() -> {
-            isSyncing = true;
-            currentSyncListener = listener;
-            if (listener != null) {
-                listener.onSyncStarted();
-            }
-
-            try {
-                int syncedCount = 0;
-
-                // 1. Sincronizar hábitos no sincronizados
-                syncedCount += syncHabits();
-
-                // 2. Sincronizar scores no sincronizados
-                syncedCount += syncScores();
-
-                // 3. Procesar operaciones pendientes
-                syncedCount += processPendingOperations();
-
-                // 4. Descargar datos del servidor (esto es asíncrono, pero notificará cuando termine)
-                downloadFromServer();
-
-                // Nota: downloadFromServer es asíncrono, pero onSyncCompleted se llamará
-                // después de que se complete la descarga en downloadFromServer
-            } catch (Exception e) {
-                isSyncing = false;
-                Log.e(TAG, "Error en sincronización", e);
+        try {
+            if (isSyncing) {
+                Log.d(TAG, "Sincronización ya en progreso (verificación adicional)");
                 if (listener != null) {
-                    listener.onSyncError(e.getMessage());
+                    listener.onSyncError("Sincronización ya en progreso");
                 }
+                return;
             }
-        });
+
+            if (!connectionMonitor.isConnected()) {
+                Log.d(TAG, "Sin conexión a la API, no se puede sincronizar");
+                if (listener != null) {
+                    listener.onSyncError("Sin conexión a la API");
+                }
+                return;
+            }
+
+            executorService.execute(() -> {
+                try {
+                    isSyncing = true;
+                    currentSyncListener = listener;
+                    if (listener != null) {
+                        listener.onSyncStarted();
+                    }
+
+                    int syncedCount = 0;
+
+                    // 1. Sincronizar hábitos no sincronizados
+                    syncedCount += syncHabits();
+
+                    // 2. Sincronizar scores no sincronizados
+                    syncedCount += syncScores();
+
+                    // 3. Procesar operaciones pendientes
+                    syncedCount += processPendingOperations();
+
+                    // 4. Descargar datos del servidor (esto es asíncrono, pero notificará cuando termine)
+                    downloadFromServer();
+
+                    // Nota: downloadFromServer es asíncrono, pero onSyncCompleted se llamará
+                    // después de que se complete la descarga en downloadFromServer
+                } catch (Exception e) {
+                    isSyncing = false;
+                    Log.e(TAG, "Error en sincronización", e);
+                    if (listener != null) {
+                        listener.onSyncError(e.getMessage());
+                    }
+                    // Liberar el lock en caso de error antes de downloadFromServer
+                    if (syncLock.isHeldByCurrentThread()) {
+                        syncLock.unlock();
+                        Log.d(TAG, "Lock de sincronización liberado (error antes de download)");
+                    }
+                }
+            });
+        } catch (Exception e) {
+            // Si hay error al iniciar la sincronización, liberar el lock
+            if (syncLock.isHeldByCurrentThread()) {
+                syncLock.unlock();
+                Log.d(TAG, "Lock de sincronización liberado (error al iniciar)");
+            }
+            throw new RuntimeException("Error al iniciar sincronización", e);
+        }
     }
 
     private int syncHabits() {
@@ -150,8 +181,9 @@ public class SyncManager {
     }
 
     private int syncScores() {
-        // Similar a syncHabits pero para scores
-        // Implementación simplificada
+        // Procesar operaciones pendientes de tipo SCORE
+        // Los scores se sincronizan a través de processPendingOperations()
+        // ya que se guardan como operaciones pendientes cuando se crean offline
         return 0;
     }
 
@@ -189,11 +221,27 @@ public class SyncManager {
             if (op.entityType.equals("HABIT")) {
                 Habit habit = gson.fromJson(op.entityData, Habit.class);
                 
+                // CRÍTICO: Asegurar que el userId esté establecido antes de enviar al servidor
+                long userId = sessionManager.getUserId();
+                if (userId > 0) {
+                    habit.setUserId(userId);
+                    Log.d(TAG, "Procesando operación pendiente con userId: " + userId);
+                } else {
+                    Log.e(TAG, "⚠️ No se puede procesar operación pendiente: userId no válido (" + userId + ")");
+                    return false;
+                }
+                
                 if (op.operationType.equals("CREATE")) {
                     apiHelper.createHabit(habit, new HabitApiHelper.OnHabitSavedListener() {
                         @Override
                         public void onSuccess(Habit createdHabit) {
-                            dbHelper.markHabitAsSynced(op.entityId, createdHabit.getId());
+                            executorService.execute(() -> {
+                                try {
+                                    dbHelper.markHabitAsSynced(op.entityId, createdHabit.getId());
+                                } catch (Exception e) {
+                                    Log.e(TAG, "Error al marcar hábito como sincronizado", e);
+                                }
+                            });
                         }
 
                         @Override
@@ -249,8 +297,9 @@ public class SyncManager {
             @Override
             public void onSuccess(List<Habit> serverHabits) {
                 executorService.execute(() -> {
-                    // 1. Obtener todos los hábitos locales que están sincronizados (tienen serverId)
-                    List<Habit> localSyncedHabits = dbHelper.getSyncedHabits();
+                    try {
+                        // 1. Obtener todos los hábitos locales que están sincronizados (tienen serverId)
+                        List<Habit> localSyncedHabits = dbHelper.getSyncedHabits();
                     
                     // 2. Crear un conjunto de serverIds que vienen del servidor
                     java.util.Set<Long> serverIds = new java.util.HashSet<>();
@@ -271,14 +320,59 @@ public class SyncManager {
                         }
                     }
                     
-                    // 4. Upsert de los hábitos del servidor
+                    // 4. Obtener el userId actual para filtrar hábitos
+                    long currentUserId = sessionManager.getUserId();
+                    
+                    // 5. Upsert de los hábitos del servidor (SOLO los del usuario actual)
+                    // CRÍTICO: Aceptar hábitos del usuario actual O hábitos con userId: 0 que tienen serverId válido
+                    // (estos últimos se corregirán en upsertHabitFromServer)
                     int count = 0;
+                    int ignoredCount = 0;
+                    Log.d(TAG, "Procesando " + serverHabits.size() + " hábitos del servidor para usuario " + currentUserId);
                     for (Habit habit : serverHabits) {
-                        // Upsert: actualizar si existe, insertar si no
-                        long localId = dbHelper.upsertHabitFromServer(habit, habit.getId());
-                        if (localId > 0) {
-                            count++;
+                        Log.d(TAG, "Hábito del servidor: " + habit.getTitle() + " (userId: " + habit.getUserId() + ", serverId: " + habit.getId() + ")");
+                        // Verificar que el hábito pertenezca al usuario actual
+                        // Si tiene userId: 0 pero tiene un serverId válido, aceptarlo (se corregirá el userId)
+                        boolean shouldAccept = false;
+                        if (habit.getUserId() == currentUserId && habit.getUserId() != 0) {
+                            // Hábito del usuario actual con userId válido
+                            shouldAccept = true;
+                        } else if (habit.getUserId() == 0 && habit.getId() > 0) {
+                            // Hábito con userId: 0 pero con serverId válido (probablemente un error de deserialización)
+                            // Lo aceptamos y upsertHabitFromServer corregirá el userId
+                            Log.w(TAG, "⚠️ Hábito con userId: 0 pero serverId válido, corrigiendo userId: " + habit.getTitle() + 
+                                    " (serverId: " + habit.getId() + ", currentUserId: " + currentUserId + ")");
+                            shouldAccept = true;
                         }
+                        
+                        if (shouldAccept) {
+                            // Upsert: actualizar si existe, insertar si no
+                            // upsertHabitFromServer corregirá el userId si es 0
+                            long localId = dbHelper.upsertHabitFromServer(habit, habit.getId());
+                            if (localId > 0) {
+                                count++;
+                            }
+                        } else {
+                            ignoredCount++;
+                            Log.w(TAG, "⚠️ Hábito del servidor ignorado (no pertenece al usuario actual): " + habit.getTitle() + 
+                                    " (userId: " + habit.getUserId() + ", currentUserId: " + currentUserId + ", serverId: " + habit.getId() + ")");
+                        }
+                    }
+                    
+                    // 6. Limpiar hábitos locales que NO pertenecen al usuario actual DESPUÉS de descargar
+                    // IMPORTANTE: Esto NO elimina hábitos locales sin serverId que pertenecen al usuario actual
+                    // Solo elimina hábitos de otros usuarios o con userId: 0
+                    // Los hábitos locales sin serverId se mantienen para sincronizarse después
+                    // CRÍTICO: Solo limpiar si el userId es válido
+                    if (currentUserId > 0) {
+                        dbHelper.deleteHabitsNotBelongingToCurrentUser();
+                        Log.d(TAG, "Limpiados hábitos locales que no pertenecen al usuario " + currentUserId + " (después de descarga)");
+                    } else {
+                        Log.w(TAG, "⚠️ No se puede limpiar hábitos: userId inválido (" + currentUserId + ")");
+                    }
+                    
+                    if (ignoredCount > 0) {
+                        Log.w(TAG, "⚠️ Total de hábitos ignorados: " + ignoredCount + " (no pertenecen al usuario " + currentUserId + ")");
                     }
                     
                     Log.d(TAG, "Descargados " + count + " hábitos del servidor (de " + serverHabits.size() + " totales)");
@@ -297,6 +391,19 @@ public class SyncManager {
                         currentSyncListener.onSyncCompleted(count);
                     }
                     Log.d(TAG, "Sincronización completada: " + count + " hábitos descargados, " + deletedCount + " eliminados");
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error crítico en downloadFromServer", e);
+                        isSyncing = false;
+                        if (currentSyncListener != null) {
+                            currentSyncListener.onSyncError("Error al descargar hábitos: " + e.getMessage());
+                        }
+                    } finally {
+                        // CRÍTICO: Liberar el lock cuando termine la sincronización
+                        if (syncLock.isHeldByCurrentThread()) {
+                            syncLock.unlock();
+                            Log.d(TAG, "Lock de sincronización liberado");
+                        }
+                    }
                 });
             }
 
@@ -307,11 +414,16 @@ public class SyncManager {
                 if (currentSyncListener != null) {
                     currentSyncListener.onSyncError(error);
                 }
+                // CRÍTICO: Liberar el lock en caso de error
+                executorService.execute(() -> {
+                    if (syncLock.isHeldByCurrentThread()) {
+                        syncLock.unlock();
+                        Log.d(TAG, "Lock de sincronización liberado (error en downloadFromServer)");
+                    }
+                });
             }
         });
     }
-    
-    private SyncListener currentSyncListener;
 
     public boolean isSyncing() {
         return isSyncing;

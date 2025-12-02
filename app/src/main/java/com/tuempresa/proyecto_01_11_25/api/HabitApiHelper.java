@@ -1,5 +1,6 @@
 package com.tuempresa.proyecto_01_11_25.api;
 
+import android.content.Context;
 import android.util.Log;
 
 import com.tuempresa.proyecto_01_11_25.model.Habit;
@@ -20,7 +21,17 @@ public class HabitApiHelper {
     private HabitApiService apiService;
 
     public HabitApiHelper() {
-        this.apiService = HabitApiClient.getInstance().getApiService();
+        // Nota: HabitApiClient.getInstance() puede fallar si no se inicializó con contexto
+        // En ese caso, se debe usar HabitApiClient.getInstance(context)
+        try {
+            this.apiService = HabitApiClient.getInstance().getApiService();
+        } catch (IllegalStateException e) {
+            Log.e(TAG, "HabitApiClient no inicializado. Usar constructor con Context.", e);
+        }
+    }
+
+    public HabitApiHelper(Context context) {
+        this.apiService = HabitApiClient.getInstance(context).getApiService();
     }
 
     /**

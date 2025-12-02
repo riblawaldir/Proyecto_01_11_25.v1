@@ -19,9 +19,11 @@ import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
+import com.tuempresa.proyecto_01_11_25.utils.ReminderNotificationManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -276,26 +278,12 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         
         btnDetectPages.setOnClickListener(v -> {
             // Preparar para ML Kit (no implementar aún)
-            Toast.makeText(this, "Función de detección de páginas próximamente", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
         });
         
         containerConfig.addView(view);
     }
 
-    private void loadVitaminsConfig() {
-        View view = getLayoutInflater().inflate(R.layout.config_vitamins, containerConfig, false);
-        
-        LinearLayout containerTimes = view.findViewById(R.id.containerTimes);
-        MaterialButton btnAddTime = view.findViewById(R.id.btnAddTime);
-        SwitchMaterial switchDaily = view.findViewById(R.id.switchDaily);
-        
-        btnAddTime.setOnClickListener(v -> {
-            // Agregar selector de hora (simplificado por ahora)
-            Toast.makeText(this, "Agregar horario próximamente", Toast.LENGTH_SHORT).show();
-        });
-        
-        containerConfig.addView(view);
-    }
 
     private void loadMeditateConfig() {
         View view = getLayoutInflater().inflate(R.layout.config_meditate, containerConfig, false);
@@ -378,7 +366,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult nameValidation = 
                 com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateHabitName(name);
         if (!nameValidation.isValid) {
-            Toast.makeText(this, nameValidation.errorMessage, Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes (validación se muestra en el campo)
             edtHabitName.requestFocus();
             return;
         }
@@ -403,7 +391,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult pagesValidation = 
                         com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validatePages(pagesPerDay);
                 if (!pagesValidation.isValid) {
-                    Toast.makeText(this, pagesValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes (validación se muestra en el campo)
                     return;
                 }
                 break;
@@ -415,7 +403,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult durationValidation = 
                         com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateMeditationDuration(durationMinutes);
                 if (!durationValidation.isValid) {
-                    Toast.makeText(this, durationValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes (validación se muestra en el campo)
                     return;
                 }
                 dndMode = getDndMode();
@@ -429,7 +417,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult gymValidation = 
                         com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateGymDays(gymDays);
                 if (!gymValidation.isValid) {
-                    Toast.makeText(this, gymValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes (validación se muestra en el campo)
                     return;
                 }
                 break;
@@ -438,7 +426,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 com.tuempresa.proyecto_01_11_25.utils.HabitValidator.ValidationResult waterValidation = 
                         com.tuempresa.proyecto_01_11_25.utils.HabitValidator.validateWaterGlasses(waterGoalGlasses);
                 if (!waterValidation.isValid) {
-                    Toast.makeText(this, waterValidation.errorMessage, Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes (validación se muestra en el campo)
                     return;
                 }
                 break;
@@ -483,10 +471,16 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
                 @Override
                 public void onSuccess(Habit updatedHabit) {
+                    // Programar notificaciones si tiene reminderTimes
+                    if (updatedHabit.getReminderTimes() != null && !updatedHabit.getReminderTimes().isEmpty()) {
+                        ReminderNotificationManager reminderManager = new ReminderNotificationManager(ConfigureHabitActivity.this);
+                        reminderManager.scheduleReminders(updatedHabit.getId(), updatedHabit.getTitle(), updatedHabit.getReminderTimes());
+                    }
+                    
                     runOnUiThread(() -> {
                         btnSave.setEnabled(true);
                         btnSave.setText(getString(R.string.save_configuration));
-                        Toast.makeText(ConfigureHabitActivity.this, "✅ " + getString(R.string.habit_updated_toast), Toast.LENGTH_SHORT).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes
                         setResult(RESULT_OK);
                         finish();
                     });
@@ -497,7 +491,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         btnSave.setEnabled(true);
                         btnSave.setText(getString(R.string.save_configuration));
-                        Toast.makeText(ConfigureHabitActivity.this, "❌ " + getString(R.string.habit_update_error_toast) + ": " + error, Toast.LENGTH_LONG).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes (error se loguea)
                     });
                 }
             });
@@ -506,10 +500,16 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             habitRepository.createHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
                 @Override
                 public void onSuccess(Habit createdHabit) {
+                    // Programar notificaciones si tiene reminderTimes
+                    if (createdHabit.getReminderTimes() != null && !createdHabit.getReminderTimes().isEmpty()) {
+                        ReminderNotificationManager reminderManager = new ReminderNotificationManager(ConfigureHabitActivity.this);
+                        reminderManager.scheduleReminders(createdHabit.getId(), createdHabit.getTitle(), createdHabit.getReminderTimes());
+                    }
+                    
                     runOnUiThread(() -> {
                         btnSave.setEnabled(true);
                         btnSave.setText(getString(R.string.save_configuration));
-                        Toast.makeText(ConfigureHabitActivity.this, "✅ " + getString(R.string.habit_saved_toast), Toast.LENGTH_SHORT).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes
                         setResult(RESULT_OK);
                         finish();
                     });
@@ -520,7 +520,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         btnSave.setEnabled(true);
                         btnSave.setText(getString(R.string.save_configuration));
-                        Toast.makeText(ConfigureHabitActivity.this, "❌ " + getString(R.string.habit_save_error_toast) + ": " + error, Toast.LENGTH_LONG).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes (error se loguea)
                     });
                 }
             });
@@ -637,8 +637,117 @@ public class ConfigureHabitActivity extends AppCompatActivity {
     }
 
     private String getReminderTimes() {
-        // Por ahora retornar JSON vacío, se implementará después
-        return "[]";
+        View configView = containerConfig.getChildAt(0);
+        if (configView == null) return "[]";
+        
+        LinearLayout containerTimes = configView.findViewById(R.id.containerTimes);
+        if (containerTimes == null) return "[]";
+        
+        JSONArray timesArray = new JSONArray();
+        
+        // Recorrer todos los hijos del containerTimes (cada uno es un horario)
+        for (int i = 0; i < containerTimes.getChildCount(); i++) {
+            View timeView = containerTimes.getChildAt(i);
+            if (timeView != null) {
+                MaterialButton btnTime = timeView.findViewById(R.id.btnSelectTime);
+                if (btnTime != null && btnTime.getText() != null) {
+                    String timeStr = btnTime.getText().toString();
+                    // Formato esperado: "08:00" o "20:30"
+                    if (timeStr.contains(":")) {
+                        try {
+                            String[] parts = timeStr.split(":");
+                            int hour = Integer.parseInt(parts[0]);
+                            int minute = Integer.parseInt(parts[1]);
+                            
+                            JSONObject timeObj = new JSONObject();
+                            timeObj.put("hour", hour);
+                            timeObj.put("minute", minute);
+                            timesArray.put(timeObj);
+                        } catch (Exception e) {
+                            android.util.Log.e("ConfigureHabit", "Error al parsear hora: " + timeStr, e);
+                        }
+                    }
+                }
+            }
+        }
+        
+        return timesArray.toString();
+    }
+    
+    private void loadVitaminsConfig() {
+        View view = getLayoutInflater().inflate(R.layout.config_vitamins, containerConfig, false);
+        
+        LinearLayout containerTimes = view.findViewById(R.id.containerTimes);
+        MaterialButton btnAddTime = view.findViewById(R.id.btnAddTime);
+        
+        // Cargar horarios existentes si estamos editando
+        if (habitToEdit != null && habitToEdit.getReminderTimes() != null) {
+            try {
+                JSONArray existingTimes = new JSONArray(habitToEdit.getReminderTimes());
+                for (int i = 0; i < existingTimes.length(); i++) {
+                    JSONObject timeObj = existingTimes.getJSONObject(i);
+                    int hour = timeObj.getInt("hour");
+                    int minute = timeObj.getInt("minute");
+                    addTimeRow(containerTimes, hour, minute);
+                }
+            } catch (JSONException e) {
+                android.util.Log.e("ConfigureHabit", "Error al cargar horarios existentes", e);
+            }
+        }
+        
+        // Agregar horario por defecto si no hay ninguno
+        if (containerTimes.getChildCount() == 0) {
+            addTimeRow(containerTimes, 8, 0); // 08:00 por defecto
+        }
+        
+        btnAddTime.setOnClickListener(v -> {
+            // Agregar nuevo horario (12:00 por defecto)
+            addTimeRow(containerTimes, 12, 0);
+        });
+        
+        containerConfig.addView(view);
+    }
+    
+    private void addTimeRow(LinearLayout container, int hour, int minute) {
+        View timeRow = getLayoutInflater().inflate(R.layout.item_reminder_time, container, false);
+        
+        MaterialButton btnTime = timeRow.findViewById(R.id.btnSelectTime);
+        btnTime.setText(String.format("%02d:%02d", hour, minute));
+        
+        btnTime.setOnClickListener(v -> {
+            // Obtener hora actual del botón
+            String currentTime = btnTime.getText().toString();
+            int currentHour = hour;
+            int currentMinute = minute;
+            if (currentTime.contains(":")) {
+                try {
+                    String[] parts = currentTime.split(":");
+                    currentHour = Integer.parseInt(parts[0]);
+                    currentMinute = Integer.parseInt(parts[1]);
+                } catch (Exception e) {
+                    // Usar valores por defecto
+                }
+            }
+            
+            // Mostrar TimePicker
+            android.app.TimePickerDialog timePicker = new android.app.TimePickerDialog(
+                this,
+                (view, selectedHour, selectedMinute) -> {
+                    btnTime.setText(String.format("%02d:%02d", selectedHour, selectedMinute));
+                },
+                currentHour,
+                currentMinute,
+                true // 24 horas
+            );
+            timePicker.show();
+        });
+        
+        MaterialButton btnRemove = timeRow.findViewById(R.id.btnRemoveTime);
+        btnRemove.setOnClickListener(v -> {
+            container.removeView(timeRow);
+        });
+        
+        container.addView(timeRow);
     }
 
     private Integer getDurationMinutes() {

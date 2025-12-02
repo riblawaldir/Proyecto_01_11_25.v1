@@ -8,6 +8,7 @@ import java.util.Date;
  */
 public class Score {
     private long id = 0;
+    private long userId = -1; // ID del usuario (requerido por API)
     private long habitId;
     private String habitTitle;
     private int points;
@@ -31,6 +32,14 @@ public class Score {
 
     public void setId(long id) {
         this.id = id;
+    }
+
+    public long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(long userId) {
+        this.userId = userId;
     }
 
     public long getHabitId() {

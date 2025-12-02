@@ -1,5 +1,7 @@
 package com.tuempresa.proyecto_01_11_25.model;
 
+import com.google.gson.annotations.SerializedName;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +25,8 @@ public class Habit {
     }
 
     private long id = -1;
+    @SerializedName("UserId")
+    private long userId = -1; // ID del usuario (requerido por API)
     private String title;
     private String goal;
     private String category;
@@ -69,6 +73,14 @@ public class Habit {
 
     public void setId(long id) {
         this.id = id;
+    }
+
+    public long getUserId() {
+        return userId;
+    }
+
+    public void setUserId(long userId) {
+        this.userId = userId;
     }
 
     public String getTitle() {

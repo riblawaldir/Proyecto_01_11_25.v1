@@ -119,25 +119,38 @@ public class ConnectionMonitor {
     }
     
     /**
-     * Verifica la conexión a la API haciendo una petición real
+     * Verifica la conexión a internet (no solo API)
      */
     private void checkApiConnection() {
         executorService.execute(() -> {
             try {
-                HabitApiService apiService = HabitApiClient.getInstance().getApiService();
-                Call<com.tuempresa.proyecto_01_11_25.model.HabitsResponse> call = apiService.getAllHabits();
+                // Verificar conexión a internet usando ConnectivityManager
+                android.net.Network activeNetwork = connectivityManager.getActiveNetwork();
+                boolean hasInternet = false;
                 
-                // Hacer petición con timeout corto para verificación rápida
-                Response<com.tuempresa.proyecto_01_11_25.model.HabitsResponse> response = call.execute();
+                if (activeNetwork != null) {
+                    android.net.NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(activeNetwork);
+                    if (capabilities != null) {
+                        hasInternet = capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                                     capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+                    }
+                }
                 
-                boolean apiAvailable = response.isSuccessful();
+                // Si no hay red activa, verificar con el método legacy
+                if (!hasInternet) {
+                    android.net.NetworkInfo activeNetworkInfo = connectivityManager.getActiveNetworkInfo();
+                    hasInternet = activeNetworkInfo != null && 
+                                 activeNetworkInfo.isConnected() && 
+                                 activeNetworkInfo.isAvailable();
+                }
+                
                 boolean wasConnected = isConnected;
-                isConnected = apiAvailable;
+                isConnected = hasInternet;
                 
-                if (apiAvailable) {
-                    Log.d(TAG, "✅ API disponible - Estado: " + response.code());
+                if (hasInternet) {
+                    Log.d(TAG, "✅ Internet disponible");
                 } else {
-                    Log.d(TAG, "❌ API no disponible - Estado: " + response.code());
+                    Log.d(TAG, "❌ Sin conexión a internet");
                 }
                 
                 // Notificar solo si cambió el estado
@@ -145,10 +158,10 @@ public class ConnectionMonitor {
                     notifyListeners(isConnected);
                 }
             } catch (Exception e) {
-                // Error al conectar con la API
+                // Error al verificar conexión
                 boolean wasConnected = isConnected;
                 isConnected = false;
-                Log.d(TAG, "❌ Error al verificar API: " + e.getMessage());
+                Log.d(TAG, "❌ Error al verificar conexión: " + e.getMessage());
                 
                 // Notificar solo si cambió el estado
                 if (wasConnected != isConnected) {

@@ -14,7 +14,7 @@ import java.util.List;
 public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "habitus.db";
-    private static final int DATABASE_VERSION = 7;
+    private static final int DATABASE_VERSION = 11;
     private final Context context;
 
     // Tabla de hábitos (protected para que HabitDatabaseHelperSync pueda acceder)
@@ -62,6 +62,11 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     protected static final String COLUMN_USER_FIRST_NAME = "first_name";
     protected static final String COLUMN_USER_LAST_NAME = "last_name";
     protected static final String COLUMN_USER_PHONE = "phone";
+    // Campos para racha diaria
+    protected static final String COLUMN_USER_CURRENT_STREAK = "current_streak";
+    protected static final String COLUMN_USER_LAST_STREAK_DATE = "last_streak_date";
+    protected static final String COLUMN_USER_DAILY_HABITS_COMPLETED = "daily_habits_completed";
+    protected static final String COLUMN_USER_LAST_ACTIVITY_DATE = "last_activity_date";
 
     // Nuevas columnas para Habits (según esquema)
     protected static final String COLUMN_HABIT_USER_ID = "user_id";
@@ -73,6 +78,16 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     // Nuevas columnas para Scores (según esquema)
     protected static final String COLUMN_SCORE_USER_ID = "user_id";
     protected static final String COLUMN_SCORE_NOTE = "note";
+
+    // Tabla de entradas del diario
+    protected static final String TABLE_DIARY_ENTRIES = "diary_entries";
+    protected static final String COLUMN_DIARY_ID = "id";
+    protected static final String COLUMN_DIARY_HABIT_ID = "habit_id";
+    protected static final String COLUMN_DIARY_USER_ID = "user_id";
+    protected static final String COLUMN_DIARY_TITLE = "title";
+    protected static final String COLUMN_DIARY_CONTENT = "content";
+    protected static final String COLUMN_DIARY_DATE = "date";
+    protected static final String COLUMN_DIARY_CREATED_AT = "created_at";
 
     public HabitDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -90,7 +105,11 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 COLUMN_USER_LAST_NAME + " TEXT, " +
                 COLUMN_USER_PHONE + " TEXT, " +
                 COLUMN_USER_CREATED_AT + " INTEGER, " +
-                COLUMN_USER_IS_ACTIVE + " INTEGER DEFAULT 1" +
+                COLUMN_USER_IS_ACTIVE + " INTEGER DEFAULT 1, " +
+                COLUMN_USER_CURRENT_STREAK + " INTEGER DEFAULT 0, " +
+                COLUMN_USER_LAST_STREAK_DATE + " INTEGER DEFAULT 0, " +
+                COLUMN_USER_DAILY_HABITS_COMPLETED + " INTEGER DEFAULT 0, " +
+                COLUMN_USER_LAST_ACTIVITY_DATE + " INTEGER DEFAULT 0" +
                 ")";
         db.execSQL(createUsersTable);
 
@@ -195,6 +214,20 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + COLUMN_SCORE_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + ")" +
                 ")";
         db.execSQL(createScoresTable);
+
+        // Crear tabla de entradas del diario
+        String createDiaryTable = "CREATE TABLE " + TABLE_DIARY_ENTRIES + " (" +
+                COLUMN_DIARY_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_DIARY_HABIT_ID + " INTEGER NOT NULL, " +
+                COLUMN_DIARY_USER_ID + " INTEGER, " +
+                COLUMN_DIARY_TITLE + " TEXT NOT NULL DEFAULT 'Nota', " +
+                COLUMN_DIARY_CONTENT + " TEXT NOT NULL, " +
+                COLUMN_DIARY_DATE + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                COLUMN_DIARY_CREATED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                "FOREIGN KEY(" + COLUMN_DIARY_HABIT_ID + ") REFERENCES " + TABLE_HABITS + "(" + COLUMN_HABIT_ID + "), " +
+                "FOREIGN KEY(" + COLUMN_DIARY_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + ")" +
+                ")";
+        db.execSQL(createDiaryTable);
     }
 
     @Override
@@ -298,17 +331,76 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                     "   WHERE " + COLUMN_HABIT_ID + " = NEW." + COLUMN_HABIT_ID + "; " +
                     " END;");
         }
+
+        if (oldVersion < 8) {
+            // Migración a versión 8: Agregar columnas de sincronización
+            // Estas columnas son necesarias para HabitDatabaseHelperSync
+            addColumnIfNotExists(db, TABLE_HABITS, "synced", "INTEGER DEFAULT 0");
+            addColumnIfNotExists(db, TABLE_HABITS, "server_id", "INTEGER");
+            addColumnIfNotExists(db, TABLE_HABITS, "updated_at", "INTEGER DEFAULT 0");
+            // Actualizar valores existentes con timestamp actual
+            db.execSQL("UPDATE " + TABLE_HABITS + " SET updated_at = " + (System.currentTimeMillis() / 1000) + " WHERE updated_at = 0 OR updated_at IS NULL");
+        }
+
+        if (oldVersion < 9) {
+            // Migración a versión 9: Crear tabla de entradas del diario
+            String createDiaryTable = "CREATE TABLE IF NOT EXISTS " + TABLE_DIARY_ENTRIES + " (" +
+                    COLUMN_DIARY_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_DIARY_HABIT_ID + " INTEGER NOT NULL, " +
+                    COLUMN_DIARY_USER_ID + " INTEGER, " +
+                    COLUMN_DIARY_CONTENT + " TEXT NOT NULL, " +
+                    COLUMN_DIARY_DATE + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                    COLUMN_DIARY_CREATED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                    "FOREIGN KEY(" + COLUMN_DIARY_HABIT_ID + ") REFERENCES " + TABLE_HABITS + "(" + COLUMN_HABIT_ID + "), " +
+                    "FOREIGN KEY(" + COLUMN_DIARY_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + ")" +
+                    ")";
+            db.execSQL(createDiaryTable);
+        }
+
+        if (oldVersion < 10) {
+            // Migración a versión 10: Agregar campos de racha diaria a usuarios
+            addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+            addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
+            addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+            addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+        }
+        if (oldVersion < 11) {
+            // Migración a versión 11: Agregar columna title a diary_entries
+            addColumnIfNotExists(db, TABLE_DIARY_ENTRIES, COLUMN_DIARY_TITLE, "TEXT NOT NULL DEFAULT 'Nota'");
+        }
+        
+        // Asegurar que las columnas de racha existan (por si acaso se saltaron migraciones)
+        // Esto es seguro porque addColumnIfNotExists verifica si la columna ya existe
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
     }
 
     protected void addColumnIfNotExists(SQLiteDatabase db, String table, String column, String type) {
         try {
+            // Verificar si la columna ya existe antes de intentar agregarla
+            Cursor cursor = db.rawQuery("PRAGMA table_info(" + table + ")", null);
+            if (cursor != null) {
+                int columnIndex = cursor.getColumnIndex("name");
+                if (columnIndex >= 0) {
+                    while (cursor.moveToNext()) {
+                        String existingColumn = cursor.getString(columnIndex);
+                        if (column.equals(existingColumn)) {
+                            cursor.close();
+                            return; // La columna ya existe
+                        }
+                    }
+                }
+                cursor.close();
+            }
+            // Si llegamos aquí, la columna no existe, así que la agregamos
             db.execSQL("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
         } catch (Exception e) {
-            // Si la columna ya existe, ignorar el error
+            // Si la columna ya existe o hay otro error, registrar pero no fallar
+            android.util.Log.w("HabitDatabaseHelper", "Error al agregar columna " + column + ": " + e.getMessage());
         }
     }
-
-    // ... (Métodos existentes de carga de campos extras) ...
 
     // ========== CRUD USUARIOS ==========
 
@@ -356,8 +448,6 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         db.close();
         return user;
     }
-
-    // ... (Resto de métodos existentes) ...
 
     /**
      * Carga los campos adicionales de un hábito desde el cursor
@@ -454,26 +544,6 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         }
     }
 
-    // MÉTODO ELIMINADO: Los hábitos ahora vienen exclusivamente de la API
-    // private void insertDefaultHabits(SQLiteDatabase db) {
-    // String[] defaultHabits = {
-    // "Ejercicio", "Goal: movimiento detectado", "salud", "EXERCISE",
-    // "Caminar", "Goal: 150 metros", "salud", "WALK",
-    // "Leer", "Goal: detectar página de libro", "educación", "READ",
-    // "Demo", "Goal: tocar para completar", "general", "DEMO"
-    // };
-    //
-    // for (int i = 0; i < defaultHabits.length; i += 4) {
-    // ContentValues values = new ContentValues();
-    // values.put(COLUMN_HABIT_TITLE, defaultHabits[i]);
-    // values.put(COLUMN_HABIT_GOAL, defaultHabits[i + 1]);
-    // values.put(COLUMN_HABIT_CATEGORY, defaultHabits[i + 2]);
-    // values.put(COLUMN_HABIT_TYPE, defaultHabits[i + 3]);
-    // values.put(COLUMN_HABIT_POINTS, 10);
-    // db.insert(TABLE_HABITS, null, values);
-    // }
-    // }
-
     // ========== CRUD HÁBITOS ==========
 
     public long insertHabit(String title, String goal, String category, String type, int points) {
@@ -490,7 +560,7 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
      * Inserta un hábito con todos los campos opcionales
      */
     // Helper para obtener el userId actual
-    private long getCurrentUserId() {
+    protected long getCurrentUserId() {
         com.tuempresa.proyecto_01_11_25.utils.SessionManager session = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(
                 context);
         return session.getUserId();
@@ -530,9 +600,17 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             String gymDays, Integer waterGoalGlasses, Boolean oneClickComplete,
             Boolean englishMode, Boolean codingMode, String habitIcon) {
         long userId = getCurrentUserId();
+        
+        // CRÍTICO: Verificar que el userId sea válido antes de guardar
+        if (userId <= 0) {
+            android.util.Log.e("HabitDatabaseHelper", "⚠️ ERROR CRÍTICO: No se puede crear hábito con userId inválido: " + userId);
+            throw new IllegalStateException("No se puede crear hábito: userId inválido (" + userId + ")");
+        }
+        
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_HABIT_USER_ID, userId); // Asignar al usuario actual
+        android.util.Log.d("HabitDatabaseHelper", "Creando hábito '" + title + "' con userId: " + userId);
         values.put(COLUMN_HABIT_TITLE, title);
         values.put(COLUMN_HABIT_GOAL, goal);
         values.put(COLUMN_HABIT_CATEGORY, category);
@@ -732,6 +810,12 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         values.put(COLUMN_HABIT_COMPLETED, completed ? 1 : 0);
         db.update(TABLE_HABITS, values, COLUMN_HABIT_TITLE + "=?", new String[] { title });
         db.close();
+        
+        // Si se completó un hábito, incrementar contador diario para la racha
+        if (completed) {
+            long userId = getCurrentUserId();
+            incrementDailyHabitCompleted(userId);
+        }
     }
 
     public int getHabitPoints(String title) {
@@ -784,6 +868,84 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
      * @param userId ID del usuario a eliminar
      * @return true si se eliminó correctamente
      */
+    /**
+     * Elimina todos los hábitos que NO pertenecen al usuario actual.
+     * Útil cuando un usuario nuevo inicia sesión para limpiar datos de pruebas anteriores.
+     * 
+     * CRÍTICO: NO elimina hábitos con serverId válido aunque tengan userId: 0,
+     * porque estos se corregirán después en upsertHabitFromServer.
+     */
+    public void deleteHabitsNotBelongingToCurrentUser() {
+        long currentUserId = getCurrentUserId();
+        
+        // CRÍTICO: No eliminar si no hay usuario logueado o userId inválido
+        if (currentUserId <= 0) {
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ No se puede eliminar hábitos: userId inválido (" + currentUserId + ")");
+            return;
+        }
+        
+        SQLiteDatabase db = this.getWritableDatabase();
+        try {
+            // CRÍTICO: NO eliminar hábitos con serverId válido aunque tengan userId: 0
+            // Estos hábitos se corregirán después en upsertHabitFromServer
+            // Solo eliminar hábitos que:
+            // 1. No tienen serverId Y (userId != currentUserId OR userId IS NULL OR userId = 0)
+            // 2. Tienen serverId Y userId != currentUserId Y userId > 0 (hábitos de otros usuarios con serverId)
+            
+            // Primero, verificar si existe la columna server_id (para compatibilidad con versiones antiguas)
+            boolean hasServerIdColumn = false;
+            try {
+                android.database.Cursor cursor = db.rawQuery("PRAGMA table_info(" + TABLE_HABITS + ")", null);
+                if (cursor != null) {
+                    while (cursor.moveToNext()) {
+                        String columnName = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                        if ("server_id".equals(columnName)) {
+                            hasServerIdColumn = true;
+                            break;
+                        }
+                    }
+                    cursor.close();
+                }
+            } catch (Exception e) {
+                android.util.Log.w("HabitDatabaseHelper", "No se pudo verificar columna server_id, asumiendo que no existe", e);
+            }
+            
+            if (hasServerIdColumn) {
+                // Eliminar hábitos que NO tienen serverId Y no pertenecen al usuario actual
+                // O hábitos que tienen serverId Y pertenecen a otro usuario (userId > 0 y != currentUserId)
+                String deleteQuery = "DELETE FROM " + TABLE_HABITS + " WHERE " +
+                    "((server_id IS NULL OR server_id = 0) AND " +
+                    "(user_id != ? OR user_id IS NULL OR user_id = 0)) OR " +
+                    "(server_id IS NOT NULL AND server_id > 0 AND user_id != ? AND user_id > 0)";
+                db.execSQL(deleteQuery, new String[]{String.valueOf(currentUserId), String.valueOf(currentUserId)});
+                android.util.Log.d("HabitDatabaseHelper", "Eliminados hábitos que no pertenecen al usuario " + currentUserId + 
+                    " (preservando hábitos con serverId válido aunque tengan userId: 0)");
+            } else {
+                // Si no existe la columna server_id, usar la lógica antigua
+                int deletedCount = db.delete(TABLE_HABITS, 
+                        COLUMN_HABIT_USER_ID + "!=? OR " + COLUMN_HABIT_USER_ID + " IS NULL OR " + COLUMN_HABIT_USER_ID + "=0", 
+                        new String[] { String.valueOf(currentUserId) });
+                android.util.Log.d("HabitDatabaseHelper", "Eliminados " + deletedCount + " hábitos que no pertenecen al usuario " + currentUserId);
+            }
+            
+            // También eliminar scores que no pertenecen al usuario actual
+            int deletedScores = db.delete(TABLE_SCORES, 
+                    COLUMN_SCORE_USER_ID + "!=? OR " + COLUMN_SCORE_USER_ID + " IS NULL OR " + COLUMN_SCORE_USER_ID + "=0", 
+                    new String[] { String.valueOf(currentUserId) });
+            android.util.Log.d("HabitDatabaseHelper", "Eliminados " + deletedScores + " scores que no pertenecen al usuario " + currentUserId);
+            
+            // También eliminar entradas de diario que no pertenecen al usuario actual
+            int deletedDiaryEntries = db.delete(TABLE_DIARY_ENTRIES,
+                    COLUMN_DIARY_USER_ID + "!=? OR " + COLUMN_DIARY_USER_ID + " IS NULL OR " + COLUMN_DIARY_USER_ID + "=0",
+                    new String[] { String.valueOf(currentUserId) });
+            android.util.Log.d("HabitDatabaseHelper", "Eliminadas " + deletedDiaryEntries + " entradas de diario que no pertenecen al usuario " + currentUserId);
+        } catch (Exception e) {
+            android.util.Log.e("HabitDatabaseHelper", "Error al eliminar hábitos de otros usuarios", e);
+        } finally {
+            db.close();
+        }
+    }
+
     public boolean deleteUser(long userId) {
         SQLiteDatabase db = this.getWritableDatabase();
         try {
@@ -848,5 +1010,392 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         db.close();
         return ranking;
+    }
+
+    // ========== CRUD ENTRADAS DEL DIARIO ==========
+
+    /**
+     * Guarda una entrada del diario asociada a un hábito
+     */
+    public long saveDiaryEntry(long habitId, String content) {
+        return saveDiaryEntry(habitId, content, null);
+    }
+
+    /**
+     * Guarda una entrada del diario con título.
+     * Si title es null, genera uno automático basado en la fecha.
+     */
+    public long saveDiaryEntry(long habitId, String content, String title) {
+        long userId = getCurrentUserId();
+        
+        // Generar título automático si no se proporciona
+        if (title == null || title.trim().isEmpty()) {
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+            title = "Nota - " + sdf.format(new java.util.Date());
+        }
+        
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_DIARY_HABIT_ID, habitId);
+        values.put(COLUMN_DIARY_USER_ID, userId);
+        values.put(COLUMN_DIARY_TITLE, title);
+        values.put(COLUMN_DIARY_CONTENT, content);
+        values.put(COLUMN_DIARY_DATE, System.currentTimeMillis() / 1000);
+        values.put(COLUMN_DIARY_CREATED_AT, System.currentTimeMillis() / 1000);
+        
+        long id = db.insert(TABLE_DIARY_ENTRIES, null, values);
+        db.close();
+        return id;
+    }
+
+    /**
+     * Obtiene todas las entradas del diario para un hábito específico
+     */
+    public List<DiaryEntry> getDiaryEntriesByHabit(long habitId) {
+        long userId = getCurrentUserId();
+        List<DiaryEntry> entries = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_DIARY_ENTRIES, null,
+                COLUMN_DIARY_HABIT_ID + "=? AND " + COLUMN_DIARY_USER_ID + "=?",
+                new String[] { String.valueOf(habitId), String.valueOf(userId) },
+                null, null, COLUMN_DIARY_DATE + " DESC");
+
+        if (cursor.moveToFirst()) {
+            do {
+                DiaryEntry entry = new DiaryEntry();
+                entry.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_ID)));
+                entry.setHabitId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_HABIT_ID)));
+                int userIdIndex = cursor.getColumnIndex(COLUMN_DIARY_USER_ID);
+                if (userIdIndex >= 0) {
+                    entry.setUserId(cursor.getLong(userIdIndex));
+                }
+                int titleIndex = cursor.getColumnIndex(COLUMN_DIARY_TITLE);
+                if (titleIndex >= 0 && !cursor.isNull(titleIndex)) {
+                    entry.setTitle(cursor.getString(titleIndex));
+                } else {
+                    // Generar título por defecto si no existe
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+                    entry.setTitle("Nota - " + sdf.format(new java.util.Date(entry.getDate() * 1000)));
+                }
+                entry.setContent(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DIARY_CONTENT)));
+                entry.setDate(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_DATE)));
+                entry.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_CREATED_AT)));
+                entries.add(entry);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return entries;
+    }
+
+    /**
+     * Obtiene todas las entradas del diario del usuario
+     */
+    public List<DiaryEntry> getAllDiaryEntries() {
+        long userId = getCurrentUserId();
+        List<DiaryEntry> entries = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_DIARY_ENTRIES, null,
+                COLUMN_DIARY_USER_ID + "=?",
+                new String[] { String.valueOf(userId) },
+                null, null, COLUMN_DIARY_DATE + " DESC");
+
+        if (cursor.moveToFirst()) {
+            do {
+                DiaryEntry entry = new DiaryEntry();
+                entry.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_ID)));
+                entry.setHabitId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_HABIT_ID)));
+                int userIdIndex = cursor.getColumnIndex(COLUMN_DIARY_USER_ID);
+                if (userIdIndex >= 0) {
+                    entry.setUserId(cursor.getLong(userIdIndex));
+                }
+                int titleIndex = cursor.getColumnIndex(COLUMN_DIARY_TITLE);
+                if (titleIndex >= 0 && !cursor.isNull(titleIndex)) {
+                    entry.setTitle(cursor.getString(titleIndex));
+                } else {
+                    // Generar título por defecto si no existe
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+                    entry.setTitle("Nota - " + sdf.format(new java.util.Date(entry.getDate() * 1000)));
+                }
+                entry.setContent(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DIARY_CONTENT)));
+                entry.setDate(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_DATE)));
+                entry.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_DIARY_CREATED_AT)));
+                entries.add(entry);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return entries;
+    }
+
+    /**
+     * Actualiza una entrada del diario
+     */
+    public boolean updateDiaryEntry(long entryId, String content) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_DIARY_CONTENT, content);
+        int rowsAffected = db.update(TABLE_DIARY_ENTRIES, values, COLUMN_DIARY_ID + "=?",
+                new String[] { String.valueOf(entryId) });
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    /**
+     * Elimina una entrada del diario
+     */
+    public boolean deleteDiaryEntry(long entryId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_DIARY_ENTRIES, COLUMN_DIARY_ID + "=?",
+                new String[] { String.valueOf(entryId) });
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    /**
+     * Clase para representar una entrada del diario
+     */
+    public static class DiaryEntry {
+        private long id;
+        private long userId = -1; // ID del usuario (requerido por API)
+        private long habitId;
+        private String title = ""; // Título (requerido por API)
+        private String content;
+        private long date;
+        private long createdAt;
+
+        public long getId() {
+            return id;
+        }
+
+        public void setId(long id) {
+            this.id = id;
+        }
+
+        public long getUserId() {
+            return userId;
+        }
+
+        public void setUserId(long userId) {
+            this.userId = userId;
+        }
+
+        public long getHabitId() {
+            return habitId;
+        }
+
+        public void setHabitId(long habitId) {
+            this.habitId = habitId;
+        }
+
+        public String getTitle() {
+            return title;
+        }
+
+        public void setTitle(String title) {
+            this.title = title;
+        }
+
+        public String getContent() {
+            return content;
+        }
+
+        public void setContent(String content) {
+            this.content = content;
+        }
+
+        public long getDate() {
+            return date;
+        }
+
+        public void setDate(long date) {
+            this.date = date;
+        }
+
+        public long getCreatedAt() {
+            return createdAt;
+        }
+
+        public void setCreatedAt(long createdAt) {
+            this.createdAt = createdAt;
+        }
+    }
+
+    // ========== GESTIÓN DE RACHA DIARIA ==========
+
+    /**
+     * Obtiene la fecha actual sin hora (solo día) en timestamp
+     */
+    private long getTodayTimestamp() {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        cal.set(java.util.Calendar.MINUTE, 0);
+        cal.set(java.util.Calendar.SECOND, 0);
+        cal.set(java.util.Calendar.MILLISECOND, 0);
+        return cal.getTimeInMillis() / 1000;
+    }
+
+    /**
+     * Verifica si es un nuevo día (después de las 00:00)
+     * y resetea el contador diario si es necesario
+     */
+    private void checkAndResetDailyCounter(long userId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Asegurar que las columnas de racha existan antes de usarlas
+        // Esto es necesario porque bases de datos antiguas pueden no tenerlas
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+        
+        long todayTimestamp = getTodayTimestamp();
+        
+        Cursor cursor = db.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_LAST_ACTIVITY_DATE, COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK, COLUMN_USER_LAST_STREAK_DATE},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        if (cursor.moveToFirst()) {
+            long lastActivityDate = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_USER_LAST_ACTIVITY_DATE));
+            
+            // Si la última actividad fue antes de hoy (00:00), resetear contador
+            if (lastActivityDate < todayTimestamp) {
+                ContentValues values = new ContentValues();
+                
+                // Si la última actividad fue ayer (mismo día calendario pero diferente timestamp)
+                long yesterdayTimestamp = todayTimestamp - 86400; // 24 horas en segundos
+                
+                if (lastActivityDate >= yesterdayTimestamp && lastActivityDate < todayTimestamp) {
+                    // Fue ayer, mantener la racha si se completaron 3+ hábitos
+                    int dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+                    int currentStreak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+                    
+                    if (dailyHabitsCompleted >= 3) {
+                        // Se mantuvo la racha, incrementar
+                        values.put(COLUMN_USER_CURRENT_STREAK, currentStreak + 1);
+                        values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                    } else {
+                        // No se completaron 3 hábitos, resetear racha
+                        values.put(COLUMN_USER_CURRENT_STREAK, 0);
+                    }
+                } else {
+                    // Fue hace más de un día, resetear racha
+                    values.put(COLUMN_USER_CURRENT_STREAK, 0);
+                }
+                
+                // Resetear contador diario
+                values.put(COLUMN_USER_DAILY_HABITS_COMPLETED, 0);
+                values.put(COLUMN_USER_LAST_ACTIVITY_DATE, todayTimestamp);
+                
+                db.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
+            }
+        }
+        cursor.close();
+        db.close();
+    }
+
+    /**
+     * Incrementa el contador de hábitos completados hoy
+     * y actualiza la racha si se alcanzan 3 hábitos
+     */
+    public void incrementDailyHabitCompleted(long userId) {
+        checkAndResetDailyCounter(userId);
+        
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Asegurar que las columnas de racha existan antes de usarlas
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+        
+        long todayTimestamp = getTodayTimestamp();
+        
+        // Obtener valores actuales
+        Cursor cursor = db.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        int dailyHabitsCompleted = 0;
+        int currentStreak = 0;
+        
+        if (cursor.moveToFirst()) {
+            dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+            currentStreak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+        }
+        cursor.close();
+        
+        // Incrementar contador
+        dailyHabitsCompleted++;
+        
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_USER_DAILY_HABITS_COMPLETED, dailyHabitsCompleted);
+        values.put(COLUMN_USER_LAST_ACTIVITY_DATE, todayTimestamp);
+        
+        // Si se alcanzan 3 hábitos completados y aún no tiene racha, iniciar racha
+        if (dailyHabitsCompleted == 3 && currentStreak == 0) {
+            values.put(COLUMN_USER_CURRENT_STREAK, 1);
+            values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+        }
+        
+        db.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
+        db.close();
+    }
+
+    /**
+     * Obtiene la racha actual del usuario
+     * @return La racha actual (0 si no tiene racha todavía)
+     */
+    public int getCurrentStreak(long userId) {
+        checkAndResetDailyCounter(userId);
+        
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_CURRENT_STREAK},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        int streak = 0;
+        if (cursor.moveToFirst()) {
+            streak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+        }
+        cursor.close();
+        db.close();
+        return streak;
+    }
+
+    /**
+     * Obtiene la racha actual del usuario logueado
+     */
+    public int getCurrentStreak() {
+        long userId = getCurrentUserId();
+        return getCurrentStreak(userId);
+    }
+
+    /**
+     * Obtiene el número de hábitos completados hoy
+     */
+    public int getDailyHabitsCompleted(long userId) {
+        checkAndResetDailyCounter(userId);
+        
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        int count = 0;
+        if (cursor.moveToFirst()) {
+            count = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+        }
+        cursor.close();
+        db.close();
+        return count;
     }
 }

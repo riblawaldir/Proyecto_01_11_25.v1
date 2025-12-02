@@ -57,16 +57,21 @@ public class SelectHabitTypeActivity extends AppCompatActivity {
         // Usar iconos disponibles o genéricos
         int iconBook = R.drawable.ic_menu_book_24;
         int iconFitness = R.drawable.ic_fitness_center_24;
+        int iconWalk = R.drawable.ic_directions_walk_24;
         
+        // Hábitos manuales/configurables
         types.add(new HabitTypeItem(Habit.HabitType.READ_BOOK, getString(R.string.habit_type_read_book), iconBook));
         types.add(new HabitTypeItem(Habit.HabitType.VITAMINS, getString(R.string.habit_type_vitamins), iconFitness));
         types.add(new HabitTypeItem(Habit.HabitType.MEDITATE, getString(R.string.habit_type_meditate), iconFitness));
         types.add(new HabitTypeItem(Habit.HabitType.JOURNALING, getString(R.string.habit_type_journaling), iconBook));
-        types.add(new HabitTypeItem(Habit.HabitType.GYM, getString(R.string.habit_type_gym), iconFitness));
         types.add(new HabitTypeItem(Habit.HabitType.WATER, getString(R.string.habit_type_water), iconFitness));
         types.add(new HabitTypeItem(Habit.HabitType.COLD_SHOWER, getString(R.string.habit_type_cold_shower), iconFitness));
-        types.add(new HabitTypeItem(Habit.HabitType.ENGLISH, getString(R.string.habit_type_english), iconBook));
-        types.add(new HabitTypeItem(Habit.HabitType.CODING, getString(R.string.habit_type_coding), iconBook));
+        
+        // Hábitos automáticos con sensores
+        types.add(new HabitTypeItem(Habit.HabitType.EXERCISE, getString(R.string.habit_type_exercise), iconFitness));
+        types.add(new HabitTypeItem(Habit.HabitType.WALK, getString(R.string.habit_type_walk), iconWalk));
+        types.add(new HabitTypeItem(Habit.HabitType.DEMO, getString(R.string.habit_type_demo), iconFitness));
+        
         return types;
     }
 

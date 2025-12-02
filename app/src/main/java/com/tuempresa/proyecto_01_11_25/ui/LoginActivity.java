@@ -10,17 +10,23 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.tuempresa.proyecto_01_11_25.R;
-import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
-import com.tuempresa.proyecto_01_11_25.model.User;
+import com.tuempresa.proyecto_01_11_25.api.AuthApiService;
+import com.tuempresa.proyecto_01_11_25.api.HabitApiClient;
+import com.tuempresa.proyecto_01_11_25.model.AuthResponse;
+import com.tuempresa.proyecto_01_11_25.model.LoginRequest;
 import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class LoginActivity extends AppCompatActivity {
 
     private android.widget.EditText etEmail, etPassword;
     private MaterialButton btnLogin;
     private TextView tvRegister;
-    private HabitDatabaseHelper dbHelper;
     private SessionManager sessionManager;
+    private AuthApiService authApiService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,14 +35,18 @@ public class LoginActivity extends AppCompatActivity {
         // Verificar sesión antes de mostrar la vista
         sessionManager = new SessionManager(this);
         if (sessionManager.isLoggedIn()) {
-            startActivity(new Intent(this, DashboardActivity.class));
+            Intent intent = new Intent(this, DashboardActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
             finish();
             return;
         }
 
         setContentView(R.layout.activity_login);
 
-        dbHelper = new HabitDatabaseHelper(this);
+        // Inicializar API Client y Auth Service
+        HabitApiClient apiClient = HabitApiClient.getInstance(this);
+        authApiService = apiClient.getAuthApiService();
 
         etEmail = findViewById(R.id.etEmail);
         etPassword = findViewById(R.id.etPassword);
@@ -58,21 +68,73 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        User user = dbHelper.getUserByEmail(email);
-        if (user != null) {
-            // En una app real, aquí deberíamos hashear la contraseña ingresada y compararla
-            // Por simplicidad en este demo, comparamos texto plano (o el hash almacenado si
-            // ya lo implementamos)
-            if (user.getPasswordHash().equals(password)) {
-                sessionManager.createLoginSession(user.getUserId(), user.getEmail());
-                Toast.makeText(this, "Bienvenido " + email, Toast.LENGTH_SHORT).show();
-                startActivity(new Intent(this, DashboardActivity.class));
-                finish();
-            } else {
-                Toast.makeText(this, "Contraseña incorrecta", Toast.LENGTH_SHORT).show();
+        // Deshabilitar botón mientras se procesa
+        btnLogin.setEnabled(false);
+        btnLogin.setText("Iniciando sesión...");
+
+        // Crear petición de login
+        LoginRequest loginRequest = new LoginRequest(email, password);
+
+        // Llamar a la API
+        Call<AuthResponse> call = authApiService.login(loginRequest);
+        call.enqueue(new Callback<AuthResponse>() {
+            @Override
+            public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
+                btnLogin.setEnabled(true);
+                btnLogin.setText("Iniciar Sesión");
+
+                if (response.isSuccessful() && response.body() != null) {
+                    AuthResponse authResponse = response.body();
+                    
+                    if (authResponse.isSuccess() && authResponse.getToken() != null) {
+                        // Guardar sesión con token JWT
+                        long userId = authResponse.getUser() != null ? authResponse.getUser().getId() : -1;
+                        String displayName = authResponse.getUser() != null ? authResponse.getUser().getDisplayName() : email;
+                        
+                        sessionManager.createLoginSession(
+                            userId,
+                            email,
+                            authResponse.getToken(),
+                            displayName
+                        );
+
+                        // NO limpiar hábitos aquí - se hará después de sincronizar en DashboardActivity
+                        // La limpieza se hará automáticamente después de descargar los hábitos del servidor
+                        // Esto evita eliminar hábitos que aún no se han descargado
+
+                        Toast.makeText(LoginActivity.this, "Bienvenido " + displayName, Toast.LENGTH_SHORT).show();
+                        Intent intent = new Intent(LoginActivity.this, DashboardActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    } else {
+                        String message = authResponse.getMessage() != null ? authResponse.getMessage() : "Error al iniciar sesión";
+                        Toast.makeText(LoginActivity.this, message, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    // Error en la respuesta
+                    String errorMessage = "Error al conectar con el servidor";
+                    if (response.code() == 400) {
+                        errorMessage = "Email o contraseña incorrectos";
+                    } else if (response.code() == 500) {
+                        errorMessage = "Error del servidor. Intenta más tarde";
+                    }
+                    Toast.makeText(LoginActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+                }
             }
-        } else {
-            Toast.makeText(this, "Usuario no encontrado", Toast.LENGTH_SHORT).show();
-        }
+
+            @Override
+            public void onFailure(Call<AuthResponse> call, Throwable t) {
+                btnLogin.setEnabled(true);
+                btnLogin.setText("Iniciar Sesión");
+                
+                String errorMessage = "Error de conexión. Verifica tu internet";
+                if (t.getMessage() != null) {
+                    errorMessage += ": " + t.getMessage();
+                }
+                Toast.makeText(LoginActivity.this, errorMessage, Toast.LENGTH_LONG).show();
+                android.util.Log.e("LoginActivity", "Error en login", t);
+            }
+        });
     }
 }

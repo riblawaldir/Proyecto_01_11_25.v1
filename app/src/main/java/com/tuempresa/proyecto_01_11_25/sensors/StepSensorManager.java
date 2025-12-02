@@ -50,7 +50,7 @@ public class StepSensorManager {
         done = false;
         accMeters = 0f;
         if (!hasPermission()) {
-            Toast.makeText(ctx, "Sin permiso de ubicación", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
             return;
         }
 
@@ -122,7 +122,7 @@ public class StepSensorManager {
                             android.util.Log.e("StepSensor", "Error al agregar puntos", e);
                         }
                         
-                        Toast.makeText(ctx, "Meta de caminar alcanzada", Toast.LENGTH_LONG).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes
                         
                         // Notificar callback si existe
                         if (onWalkCompletedCallback != null) {

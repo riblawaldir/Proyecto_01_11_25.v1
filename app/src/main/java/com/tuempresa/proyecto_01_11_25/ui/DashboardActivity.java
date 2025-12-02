@@ -71,6 +71,8 @@ public class DashboardActivity extends AppCompatActivity {
     private ExecutorService executorService;
     private ConnectionMonitor connectionMonitor;
     private android.view.View connectionIndicator;
+    private OfflineDialog offlineDialog;
+    private boolean wasConnected = true; // Asumir conectado inicialmente
 
     private boolean focusMode = false;
     private boolean isNight = false;
@@ -163,7 +165,7 @@ public class DashboardActivity extends AppCompatActivity {
 
         fused = LocationServices.getFusedLocationProviderClient(this);
 
-        // 🔥 ELIMINAR BASE DE DATOS LOCAL para forzar sincronización limpia desde la
+        // Eliminar base de datos local para forzar sincronización limpia desde la
         // API
         // Esto resuelve conflictos y asegura que la app se sincronice correctamente con
         // el servidor
@@ -176,18 +178,47 @@ public class DashboardActivity extends AppCompatActivity {
             android.util.Log.d("Dashboard", "Base de datos local eliminada. Se sincronizará desde la API.");
         }
 
-        // 🔥 Inicializar base de datos (mantener para compatibilidad)
+        // Inicializar base de datos (mantener para compatibilidad)
         dbHelper = new HabitDatabaseHelper(this);
 
-        // 🔥 Inicializar HabitEventStore para cargar eventos guardados
+        // CRÍTICO: Verificar usuario logueado y limpiar hábitos de otros usuarios
+        // Esto asegura que solo se muestren los hábitos del usuario actual
+        com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+        
+        if (sessionManager.isLoggedIn()) {
+            long currentUserId = sessionManager.getUserId();
+            android.util.Log.d("Dashboard", "Usuario logueado: " + currentUserId + " (" + sessionManager.getUserEmail() + ")");
+            
+            // CRÍTICO: Limpiar hábitos con userId: 0 (hábitos huérfanos)
+            // Esto previene que se muestren hábitos corruptos
+            com.tuempresa.proyecto_01_11_25.database.CleanupHelper cleanupHelper = 
+                new com.tuempresa.proyecto_01_11_25.database.CleanupHelper(this);
+            int cleanedCount = cleanupHelper.cleanupHabitsWithUserIdZero();
+            if (cleanedCount > 0) {
+                android.util.Log.w("Dashboard", "⚠️ Eliminados " + cleanedCount + " hábitos con userId: 0 (hábitos huérfanos)");
+            }
+            
+            // CRÍTICO: NO limpiar hábitos aquí porque puede eliminar hábitos con serverId válido
+            // que tienen userId: 0 (se corregirán después en la sincronización)
+            // La limpieza se hará DESPUÉS de la sincronización en refreshHabitsList()
+            android.util.Log.d("Dashboard", "Cargando hábitos del usuario " + currentUserId + " (limpieza después de sincronización)");
+        } else {
+            android.util.Log.w("Dashboard", "⚠️ No hay usuario logueado. Redirigiendo a LoginActivity.");
+            // Si no hay sesión, redirigir a LoginActivity
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+
+        // Inicializar HabitEventStore para cargar eventos guardados
         HabitEventStore.init(this);
 
-        // 🔥 Inicializar Repository para consumo de API
+        // Inicializar Repository para consumo de API
         habitRepository = HabitRepository.getInstance(this);
 
-        // 🔥 Cargar hábitos usando Repository (SQLite + API)
-        // Como la base de datos está vacía, se descargarán todos los hábitos desde la
-        // API
+        // Cargar hábitos usando Repository (SQLite + API)
+        // Esto cargará solo los hábitos del usuario actual (filtrado por userId)
         loadHabitsFromRepository();
 
         rv = findViewById(R.id.rvHabits);
@@ -219,8 +250,7 @@ public class DashboardActivity extends AppCompatActivity {
             }
         });
 
-        // Botón temporal para resetear estado (solo para debugging - remover en
-        // producción)
+        // Botón para agregar nuevo hábito
         com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton fabAddHabit = findViewById(
                 R.id.fabAddHabit);
         if (fabAddHabit != null) {
@@ -361,10 +391,16 @@ public class DashboardActivity extends AppCompatActivity {
                     // Ya estamos en dashboard
                     return true;
                 } else if (itemId == R.id.nav_scores) {
-                    startActivity(new Intent(this, ScoresActivity.class));
+                    Intent intent = new Intent(this, ScoresActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(intent);
+                    finish(); // Cerrar esta Activity para evitar apilar
                     return true;
                 } else if (itemId == R.id.nav_profile) {
-                    startActivity(new Intent(this, ProfileActivity.class));
+                    Intent intent = new Intent(this, ProfileActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                    startActivity(intent);
+                    finish(); // Cerrar esta Activity para evitar apilar
                     return true;
                 }
                 return false;
@@ -413,7 +449,18 @@ public class DashboardActivity extends AppCompatActivity {
         connectionMonitor.addListener(connectionListener);
 
         // Actualizar estado inicial
-        updateConnectionIndicator(connectionMonitor.isConnected());
+        boolean initialConnection = connectionMonitor.isConnected();
+        wasConnected = initialConnection;
+        updateConnectionIndicator(initialConnection);
+        
+        // Si no hay conexión al iniciar, mostrar diálogo después de un breve delay
+        if (!initialConnection) {
+            mainHandler.postDelayed(() -> {
+                if (!connectionMonitor.isConnected()) {
+                    showOfflineDialog();
+                }
+            }, 1000); // Delay de 1 segundo para que la UI se cargue primero
+        }
     }
 
     /**
@@ -423,9 +470,63 @@ public class DashboardActivity extends AppCompatActivity {
         @Override
         public void onConnectionChanged(boolean isConnected) {
             // Actualizar en el hilo principal
-            mainHandler.post(() -> updateConnectionIndicator(isConnected));
+            mainHandler.post(() -> {
+                updateConnectionIndicator(isConnected);
+                handleConnectionChange(isConnected);
+            });
         }
     };
+    
+    /**
+     * Maneja los cambios de conexión (muestra/oculta diálogo offline)
+     */
+    private void handleConnectionChange(boolean isConnected) {
+        // Si perdió conexión y antes estaba conectado, mostrar diálogo
+        if (!isConnected && wasConnected) {
+            showOfflineDialog();
+        }
+        // Si recuperó conexión y antes estaba desconectado, ocultar diálogo y sincronizar
+        else if (isConnected && !wasConnected) {
+            hideOfflineDialog();
+            // Sincronizar automáticamente cuando vuelve la conexión
+            syncWhenConnectionRestored();
+        }
+        
+        wasConnected = isConnected;
+    }
+    
+    /**
+     * Muestra el diálogo de modo offline
+     */
+    private void showOfflineDialog() {
+        if (offlineDialog == null || !offlineDialog.isShowing()) {
+            offlineDialog = new OfflineDialog(this);
+            offlineDialog.show();
+            android.util.Log.d("Dashboard", "📴 Mostrando diálogo de modo offline");
+        }
+    }
+    
+    /**
+     * Oculta el diálogo de modo offline
+     */
+    private void hideOfflineDialog() {
+        if (offlineDialog != null && offlineDialog.isShowing()) {
+            offlineDialog.dismiss();
+            offlineDialog = null;
+            android.util.Log.d("Dashboard", "📶 Ocultando diálogo de modo offline");
+        }
+    }
+    
+    /**
+     * Sincroniza automáticamente cuando se restaura la conexión
+     */
+    private void syncWhenConnectionRestored() {
+        if (habitRepository != null) {
+            android.util.Log.d("Dashboard", "🔄 Conexión restaurada - Iniciando sincronización automática...");
+            habitRepository.forceSync();
+            // Toast eliminado - usuario no quiere mensajes constantes
+        }
+    }
 
     /**
      * Actualiza el indicador visual de conexión
@@ -435,15 +536,15 @@ public class DashboardActivity extends AppCompatActivity {
             return;
 
         if (isConnected) {
-            // Verde = Conectado a la API
+            // Verde = Conectado a internet
             connectionIndicator.setBackgroundResource(R.drawable.connection_indicator_online);
             connectionIndicator.setContentDescription(getString(R.string.connection_online));
-            android.util.Log.d("Dashboard", "🟢 Indicador: Conectado a la API");
+            android.util.Log.d("Dashboard", "🟢 Indicador: Conectado a internet");
         } else {
-            // Rojo = Modo offline (SQLite)
+            // Rojo = Sin conexión a internet
             connectionIndicator.setBackgroundResource(R.drawable.connection_indicator_offline);
             connectionIndicator.setContentDescription(getString(R.string.connection_offline));
-            android.util.Log.d("Dashboard", "🔴 Indicador: Modo offline (SQLite)");
+            android.util.Log.d("Dashboard", "🔴 Indicador: Sin conexión a internet");
         }
     }
 
@@ -491,7 +592,7 @@ public class DashboardActivity extends AppCompatActivity {
                 // Para versiones anteriores a Android 6.0, no podemos controlar notificaciones
                 // programáticamente
                 android.util.Log.d("Dashboard", "Versión de Android no soporta control de notificaciones");
-                Toast.makeText(this, "Esta función requiere Android 6.0 o superior", Toast.LENGTH_SHORT).show();
+                // Toast eliminado - usuario no quiere mensajes constantes
             }
         } catch (Exception e) {
             android.util.Log.e("Dashboard", "Error al cambiar estado de notificaciones", e);
@@ -613,8 +714,7 @@ public class DashboardActivity extends AppCompatActivity {
         AppCompatDelegate.setDefaultNightMode(
                 enableNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
 
-        Toast.makeText(this, enableNight ? "🌙 Modo oscuro activado" : "☀️ Modo claro activado", Toast.LENGTH_SHORT)
-                .show();
+        // Toast eliminado - usuario no quiere mensajes constantes
         safeRecreate();
     }
 
@@ -640,14 +740,14 @@ public class DashboardActivity extends AppCompatActivity {
                     isNight ? AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
             // Reactivar notificaciones
             toggleNotifications(true);
-            Toast.makeText(this, "💙 Modo Foco Desactivado", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
         } else {
             android.util.Log.d("Dashboard", "Activando modo foco");
             focusMode = true;
             prefs.edit().putBoolean(KEY_FOCUS_MODE, true).apply();
             // Desactivar notificaciones
             toggleNotifications(false);
-            Toast.makeText(this, "💙 Modo Foco Activado!", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
 
             // Registrar evento en mapa
             addLocationEvent("Modo Foco 🧘 Activado", HabitEvent.HabitType.FOCUS);
@@ -724,6 +824,12 @@ public class DashboardActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
 
+        // Cerrar diálogo offline si está abierto
+        if (offlineDialog != null && offlineDialog.isShowing()) {
+            offlineDialog.dismiss();
+            offlineDialog = null;
+        }
+
         // Cerrar ExecutorService
         if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
@@ -753,38 +859,13 @@ public class DashboardActivity extends AppCompatActivity {
         if (connectionMonitor != null) {
             connectionMonitor.removeListener(connectionListener);
         }
+        
+        // Cerrar diálogo offline si está abierto
+        if (offlineDialog != null && offlineDialog.isShowing()) {
+            offlineDialog.dismiss();
+            offlineDialog = null;
+        }
     }
-
-    // MÉTODO ELIMINADO: Los hábitos ahora vienen exclusivamente de la API
-    // /**
-    // * Carga los hábitos predeterminados y restaura sus estados de completado
-    // */
-    // private List<Habit> loadHabitsWithState() {
-    // List<Habit> defaultHabits = Habit.defaultHabits();
-    //
-    // // Cargar estados guardados
-    // String habitsStateJson = prefs.getString(KEY_HABITS_STATE, null);
-    // if (habitsStateJson != null) {
-    // try {
-    // JSONObject stateJson = new JSONObject(habitsStateJson);
-    //
-    // // Restaurar estado de cada hábito
-    // for (Habit habit : defaultHabits) {
-    // String habitKey = habit.getTitle(); // Usar título como key
-    // if (stateJson.has(habitKey)) {
-    // boolean completed = stateJson.getBoolean(habitKey);
-    // habit.setCompleted(completed);
-    // android.util.Log.d("Dashboard", "Restaurado estado de " + habitKey + ": " +
-    // completed);
-    // }
-    // }
-    // } catch (JSONException e) {
-    // android.util.Log.e("Dashboard", "Error al cargar estados de hábitos", e);
-    // }
-    // }
-    //
-    // return defaultHabits;
-    // }
 
     /**
      * Guarda los estados de completado de todos los hábitos
@@ -915,16 +996,27 @@ public class DashboardActivity extends AppCompatActivity {
      * Usa Repository para cargar desde SQLite + sincronizar con API
      */
     private void refreshHabitsList() {
+        // Verificar que hay un usuario logueado
+        com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+        
+        if (!sessionManager.isLoggedIn()) {
+            android.util.Log.w("Dashboard", "⚠️ No hay usuario logueado en refreshHabitsList");
+            return;
+        }
+        
         if (habitRepository == null) {
             habitRepository = HabitRepository.getInstance(this);
         }
 
         // Usar Repository para refrescar (sincroniza con API si hay conexión)
+        // Esto cargará solo los hábitos del usuario actual (filtrado por userId)
         loadHabitsFromRepository();
 
         // Forzar sincronización inmediata si hay conexión
+        // La sincronización descargará hábitos del servidor y limpiará hábitos de otros usuarios
         if (connectionMonitor != null && connectionMonitor.isConnected()) {
-            android.util.Log.d("Dashboard", "Forzando sincronización inmediata...");
+            android.util.Log.d("Dashboard", "Forzando sincronización inmediata para usuario " + sessionManager.getUserId());
             habitRepository.forceSync();
         }
     }
@@ -1056,7 +1148,7 @@ public class DashboardActivity extends AppCompatActivity {
                 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             openCameraForReading();
         } else if (requestCode == 100) {
-            Toast.makeText(this, "Se necesita permiso de cámara para leer", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
         }
     }
 
@@ -1157,14 +1249,13 @@ public class DashboardActivity extends AppCompatActivity {
                 }
 
                 android.util.Log.d("Dashboard", "Hábito completado: " + habit.getTitle() + " (+" + points + " puntos)");
-                Toast.makeText(this, "✅ " + habit.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT)
-                        .show();
+                // Toast eliminado - usuario no quiere mensajes constantes
                 break;
             }
         }
     }
 
-    /** ✅ Maneja el click en un hábito según su tipo */
+    /** Maneja el click en un hábito según su tipo */
     private void completeDemoHabit(Habit h) {
         // Si ya está completado, desmarcarlo (toggle) - solo para DEMO
         if (h.isCompleted() && h.getType() == Habit.HabitType.DEMO) {
@@ -1177,7 +1268,7 @@ public class DashboardActivity extends AppCompatActivity {
             } else {
                 adapter.notifyDataSetChanged();
             }
-            Toast.makeText(this, "Hábito desmarcado", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
             return;
         }
 
@@ -1198,7 +1289,8 @@ public class DashboardActivity extends AppCompatActivity {
                         .putExtra("habit_id", h.getId()), 302);
                 break;
             case DEMO:
-                // Completar DEMO manualmente
+            case VITAMINS:
+                // Completar manualmente (DEMO o VITAMINS)
                 h.setCompleted(true);
                 dbHelper.updateHabitCompleted(h.getTitle(), true);
 
@@ -1206,12 +1298,12 @@ public class DashboardActivity extends AppCompatActivity {
                 habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
                     @Override
                     public void onSuccess(Habit updatedHabit) {
-                        android.util.Log.d("Dashboard", "Hábito DEMO actualizado en API");
+                        android.util.Log.d("Dashboard", "Hábito " + h.getType().name() + " actualizado en API");
                     }
 
                     @Override
                     public void onError(String error) {
-                        android.util.Log.e("Dashboard", "Error al actualizar hábito DEMO en API: " + error);
+                        android.util.Log.e("Dashboard", "Error al actualizar hábito " + h.getType().name() + " en API: " + error);
                     }
                 });
 
@@ -1221,29 +1313,31 @@ public class DashboardActivity extends AppCompatActivity {
                         new HabitRepository.RepositoryCallback<Void>() {
                             @Override
                             public void onSuccess(Void data) {
-                                android.util.Log.d("Dashboard", "Score DEMO guardado: " + points + " puntos");
+                                android.util.Log.d("Dashboard", "Score " + h.getType().name() + " guardado: " + points + " puntos");
                             }
 
                             @Override
                             public void onError(String error) {
-                                android.util.Log.e("Dashboard", "Error al guardar score DEMO: " + error);
+                                android.util.Log.e("Dashboard", "Error al guardar score " + h.getType().name() + ": " + error);
                             }
                         });
                 saveHabitsState();
-                addLocationEvent("Demo ✅ Completado", HabitEvent.HabitType.DEMO);
+                addLocationEvent(h.getTitle() + " ✅ Completado", HabitEvent.HabitType.DEMO);
                 int position = habits.indexOf(h);
                 if (position >= 0) {
                     adapter.notifyItemChanged(position);
                 } else {
                     adapter.notifyDataSetChanged();
                 }
-                Toast.makeText(this, "✅ " + h.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT)
-                        .show();
+                // Toast eliminado - usuario no quiere mensajes constantes
+                break;
+            case EXERCISE:
+            case WALK:
+            case READ:
+                // Toast eliminado - usuario no quiere mensajes constantes
                 break;
             default:
-                Toast.makeText(this,
-                        "Esto se completa automáticamente con sensores ✅",
-                        Toast.LENGTH_SHORT).show();
+                // Toast eliminado - usuario no quiere mensajes constantes
                 break;
         }
     }
@@ -1282,8 +1376,7 @@ public class DashboardActivity extends AppCompatActivity {
                                         adapter.removeHabit(habit);
                                     }
                                     habits.remove(habit);
-                                    Toast.makeText(DashboardActivity.this, "✅ Hábito eliminado", Toast.LENGTH_SHORT)
-                                            .show();
+                                    // Toast eliminado - usuario no quiere mensajes constantes
                                 });
                             }
 
@@ -1291,13 +1384,12 @@ public class DashboardActivity extends AppCompatActivity {
                             public void onError(String error) {
                                 runOnUiThread(() -> {
                                     android.util.Log.e("Dashboard", "Error al eliminar hábito: " + error);
-                                    Toast.makeText(DashboardActivity.this, "❌ Error al eliminar el hábito",
-                                            Toast.LENGTH_SHORT).show();
+                                    // Toast eliminado - usuario no quiere mensajes constantes
                                 });
                             }
                         });
                     } else {
-                        Toast.makeText(this, "❌ No se pudo encontrar el hábito", Toast.LENGTH_SHORT).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes
                     }
                 })
                 .setNegativeButton("Cancelar", null)

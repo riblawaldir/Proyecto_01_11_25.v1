@@ -241,7 +241,7 @@ public class CameraActivity extends AppCompatActivity {
                 progressPrefs.edit().putInt(todayKey, currentPages + 1).apply();
                 
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "✅ Página detectada! (+1 página)", Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                 });
             }
         }

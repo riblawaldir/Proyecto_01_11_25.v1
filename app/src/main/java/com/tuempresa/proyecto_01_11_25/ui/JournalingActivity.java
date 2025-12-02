@@ -1,9 +1,6 @@
 package com.tuempresa.proyecto_01_11_25.ui;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -17,6 +14,7 @@ import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
 public class JournalingActivity extends AppCompatActivity {
@@ -24,7 +22,6 @@ public class JournalingActivity extends AppCompatActivity {
     private Habit habit;
     private HabitDatabaseHelper dbHelper;
     private HabitRepository habitRepository;
-    private SharedPreferences journalPrefs;
     private TextInputEditText edtJournal;
 
     @Override
@@ -47,16 +44,10 @@ public class JournalingActivity extends AppCompatActivity {
             return;
         }
 
-        journalPrefs = getSharedPreferences("journal_entries", Context.MODE_PRIVATE);
-        
         edtJournal = findViewById(R.id.edtJournal);
         
-        // Cargar entrada del día si existe
-        String todayKey = "journal_" + habit.getId() + "_" + getTodayKey();
-        String savedText = journalPrefs.getString(todayKey, "");
-        if (!savedText.isEmpty()) {
-            edtJournal.setText(savedText);
-        }
+        // Cargar entrada del día si existe desde la base de datos
+        loadTodayEntry();
         
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
         
@@ -64,16 +55,50 @@ public class JournalingActivity extends AppCompatActivity {
         btnSave.setOnClickListener(v -> saveJournal());
     }
 
+    private void loadTodayEntry() {
+        // Buscar entrada del día actual para este hábito
+        List<HabitDatabaseHelper.DiaryEntry> entries = dbHelper.getDiaryEntriesByHabit(habit.getId());
+        String todayKey = getTodayKey();
+        
+        for (HabitDatabaseHelper.DiaryEntry entry : entries) {
+            String entryDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    .format(new Date(entry.getDate() * 1000));
+            if (entryDate.equals(todayKey)) {
+                edtJournal.setText(entry.getContent());
+                break;
+            }
+        }
+    }
+
     private void saveJournal() {
         String text = edtJournal.getText() != null ? edtJournal.getText().toString().trim() : "";
         
         if (text.isEmpty()) {
-            Toast.makeText(this, "Escribe algo sobre tu día", Toast.LENGTH_SHORT).show();
+            // Toast eliminado - usuario no quiere mensajes constantes
             return;
         }
         
-        String todayKey = "journal_" + habit.getId() + "_" + getTodayKey();
-        journalPrefs.edit().putString(todayKey, text).apply();
+        // Guardar en base de datos
+        // Primero verificar si ya existe una entrada para hoy
+        List<HabitDatabaseHelper.DiaryEntry> entries = dbHelper.getDiaryEntriesByHabit(habit.getId());
+        String todayKey = getTodayKey();
+        boolean found = false;
+        
+        for (HabitDatabaseHelper.DiaryEntry entry : entries) {
+            String entryDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                    .format(new Date(entry.getDate() * 1000));
+            if (entryDate.equals(todayKey)) {
+                // Actualizar entrada existente
+                dbHelper.updateDiaryEntry(entry.getId(), text);
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            // Crear nueva entrada
+            dbHelper.saveDiaryEntry(habit.getId(), text);
+        }
         
         // Completar hábito
         habit.setCompleted(true);
@@ -100,7 +125,7 @@ public class JournalingActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     // Notificar al Dashboard para actualizar la UI
                     setResult(RESULT_OK);
-                    Toast.makeText(JournalingActivity.this, "✅ Entrada guardada (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }
@@ -111,7 +136,7 @@ public class JournalingActivity extends AppCompatActivity {
                     android.util.Log.e("Journaling", "Error al guardar score: " + error);
                     // Aún así notificar éxito local
                     setResult(RESULT_OK);
-                    Toast.makeText(JournalingActivity.this, "✅ Entrada guardada (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }

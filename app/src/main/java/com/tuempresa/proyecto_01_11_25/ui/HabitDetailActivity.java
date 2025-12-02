@@ -91,6 +91,22 @@ public class HabitDetailActivity extends AppCompatActivity {
         if (btnBack != null) {
             btnBack.setOnClickListener(v -> finish());
         }
+        
+        // Agregar botón para ver historial de notas (si existe el layout)
+        setupJournalHistoryButton();
+    }
+    
+    private void setupJournalHistoryButton() {
+        // Buscar botón de historial en el layout (puede no existir en todos los layouts)
+        View btnHistory = findViewById(R.id.btnViewJournalHistory);
+        if (btnHistory != null) {
+            btnHistory.setOnClickListener(v -> {
+                Intent intent = new Intent(this, HabitJournalHistoryActivity.class);
+                intent.putExtra("habit_id", habit.getId());
+                intent.putExtra("habit_title", habit.getTitle());
+                startActivity(intent);
+            });
+        }
     }
 
     private void setupReadBook() {
@@ -173,7 +189,7 @@ public class HabitDetailActivity extends AppCompatActivity {
                             addPagesRead(pages);
                         }
                     } catch (NumberFormatException e) {
-                        Toast.makeText(this, "Número inválido", Toast.LENGTH_SHORT).show();
+                        // Toast eliminado - usuario no quiere mensajes constantes
                     }
                 }
             })
@@ -191,7 +207,7 @@ public class HabitDetailActivity extends AppCompatActivity {
         // Notificar al Dashboard para actualizar la UI
         setResult(RESULT_OK);
         
-        Toast.makeText(this, "+" + pages + " páginas agregadas", Toast.LENGTH_SHORT).show();
+        // Toast eliminado - usuario no quiere mensajes constantes
     }
 
     private void setupWater() {
@@ -254,7 +270,7 @@ public class HabitDetailActivity extends AppCompatActivity {
         // Notificar al Dashboard para actualizar la UI
         setResult(RESULT_OK);
         
-        Toast.makeText(this, "¡Vaso agregado! 💧", Toast.LENGTH_SHORT).show();
+        // Toast eliminado - usuario no quiere mensajes constantes
     }
 
     private void setupColdShower() {
@@ -290,7 +306,7 @@ public class HabitDetailActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     // Notificar al Dashboard para actualizar la UI
                     setResult(RESULT_OK);
-                    Toast.makeText(HabitDetailActivity.this, "✅ " + habit.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }
@@ -301,7 +317,7 @@ public class HabitDetailActivity extends AppCompatActivity {
                     android.util.Log.e("HabitDetail", "Error al guardar score: " + error);
                     // Aún así notificar éxito local
                     setResult(RESULT_OK);
-                    Toast.makeText(HabitDetailActivity.this, "✅ " + habit.getTitle() + " completado (+" + points + " pts)", Toast.LENGTH_SHORT).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }

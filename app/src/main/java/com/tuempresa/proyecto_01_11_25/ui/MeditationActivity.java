@@ -1,7 +1,5 @@
 package com.tuempresa.proyecto_01_11_25.ui;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.media.AudioManager;
 import android.media.ToneGenerator;
 import android.os.Bundle;
@@ -153,7 +151,7 @@ public class MeditationActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     // Notificar al Dashboard para actualizar la UI
                     setResult(RESULT_OK);
-                    Toast.makeText(MeditationActivity.this, "✅ Meditación completada (+" + points + " pts)", Toast.LENGTH_LONG).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }
@@ -164,7 +162,7 @@ public class MeditationActivity extends AppCompatActivity {
                     android.util.Log.e("Meditation", "Error al guardar score: " + error);
                     // Aún así notificar éxito local
                     setResult(RESULT_OK);
-                    Toast.makeText(MeditationActivity.this, "✅ Meditación completada (+" + points + " pts)", Toast.LENGTH_LONG).show();
+                    // Toast eliminado - usuario no quiere mensajes constantes
                     finish();
                 });
             }
