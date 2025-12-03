@@ -418,29 +418,33 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         // 1. Verificar si ya existe por serverId (pasar db para no cerrarla)
         Habit existing = getHabitByServerId(serverId, db);
         
-        // 2. Si no existe por serverId, buscar hábitos locales sin serverId que coincidan
+        // 2. Si no existe por serverId, buscar hábitos locales que coincidan
         // Esto evita crear duplicados cuando un hábito local se sube al servidor
+        // Buscar tanto hábitos sin serverId como hábitos con serverId diferente pero mismo título/tipo
         if (existing == null) {
-            // Buscar hábitos locales sin serverId que tengan el mismo título y tipo
-            // y pertenezcan al usuario actual
-            String selection = COLUMN_HABIT_SERVER_ID + " IS NULL AND " +
-                              COLUMN_HABIT_TITLE + "=? AND " +
+            // Buscar hábitos locales que tengan el mismo título, tipo y userId
+            // pero que NO tengan este serverId (para evitar duplicados)
+            String selection = COLUMN_HABIT_TITLE + "=? AND " +
                               COLUMN_HABIT_TYPE + "=? AND " +
-                              COLUMN_HABIT_USER_ID + "=?";
+                              COLUMN_HABIT_USER_ID + "=? AND " +
+                              "(" + COLUMN_HABIT_SERVER_ID + " IS NULL OR " + COLUMN_HABIT_SERVER_ID + " != ?)";
             String[] selectionArgs = new String[]{
                 habit.getTitle(),
                 habit.getType().name(),
-                String.valueOf(currentUserId)
+                String.valueOf(currentUserId),
+                String.valueOf(serverId)
             };
             
             Cursor cursor = db.query(TABLE_HABITS, null, selection, selectionArgs, null, null, null, "1");
             if (cursor != null && cursor.moveToFirst()) {
-                // Encontrar un hábito local sin serverId que coincide
+                // Encontrar un hábito local que coincide
                 long localId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_HABIT_ID));
                 // Obtener el hábito completo usando cursorToHabit
                 existing = cursorToHabit(cursor);
                 cursor.close();
-                Log.d(TAG, "Encontrado hábito local sin serverId que coincide: " + existing.getTitle() + " (localId: " + localId + ")");
+                Log.d(TAG, "Encontrado hábito local que coincide (evitando duplicado): " + existing.getTitle() + 
+                      " (localId: " + localId + ", serverId actual: " + getServerId(localId) + 
+                      ", nuevo serverId: " + serverId + ")");
             } else if (cursor != null) {
                 cursor.close();
             }

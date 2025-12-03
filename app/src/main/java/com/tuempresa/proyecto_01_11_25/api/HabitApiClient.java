@@ -72,6 +72,7 @@ public class HabitApiClient {
     private HabitApiService apiService;
     private ScoreApiService scoreApiService;
     private AuthApiService authApiService;
+    private UserApiService userApiService;
     private Retrofit retrofit;
     private Context context;
 
@@ -171,6 +172,7 @@ public class HabitApiClient {
         apiService = retrofit.create(HabitApiService.class);
         scoreApiService = retrofit.create(ScoreApiService.class);
         authApiService = retrofit.create(AuthApiService.class);
+        userApiService = retrofit.create(UserApiService.class);
     }
 
     /**
@@ -220,6 +222,14 @@ public class HabitApiClient {
      */
     public AuthApiService getAuthApiService() {
         return authApiService;
+    }
+
+    /**
+     * Obtiene el servicio de User API configurado.
+     * @return UserApiService para realizar llamadas de usuarios
+     */
+    public UserApiService getUserApiService() {
+        return userApiService;
     }
 
     /**

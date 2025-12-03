@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
 import com.tuempresa.proyecto_01_11_25.model.Habit;
+import com.tuempresa.proyecto_01_11_25.model.Friend;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +15,7 @@ import java.util.List;
 public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "habitus.db";
-    private static final int DATABASE_VERSION = 11;
+    private static final int DATABASE_VERSION = 12;
     private final Context context;
 
     // Tabla de hábitos (protected para que HabitDatabaseHelperSync pueda acceder)
@@ -88,6 +89,18 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     protected static final String COLUMN_DIARY_CONTENT = "content";
     protected static final String COLUMN_DIARY_DATE = "date";
     protected static final String COLUMN_DIARY_CREATED_AT = "created_at";
+
+    // Tabla de amigos
+    protected static final String TABLE_FRIENDS = "friends";
+    protected static final String COLUMN_FRIEND_ID = "id";
+    protected static final String COLUMN_FRIEND_USER_ID = "user_id";
+    protected static final String COLUMN_FRIEND_FRIEND_USER_ID = "friend_user_id";
+    protected static final String COLUMN_FRIEND_EMAIL = "friend_email";
+    protected static final String COLUMN_FRIEND_NAME = "friend_name";
+    protected static final String COLUMN_FRIEND_TOTAL_HABITS = "total_habits";
+    protected static final String COLUMN_FRIEND_TOTAL_POINTS = "total_points";
+    protected static final String COLUMN_FRIEND_CURRENT_STREAK = "current_streak";
+    protected static final String COLUMN_FRIEND_ADDED_AT = "added_at";
 
     public HabitDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -228,6 +241,22 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 "FOREIGN KEY(" + COLUMN_DIARY_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + ")" +
                 ")";
         db.execSQL(createDiaryTable);
+
+        // Crear tabla de amigos
+        String createFriendsTable = "CREATE TABLE " + TABLE_FRIENDS + " (" +
+                COLUMN_FRIEND_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_FRIEND_USER_ID + " INTEGER NOT NULL, " +
+                COLUMN_FRIEND_FRIEND_USER_ID + " INTEGER, " +
+                COLUMN_FRIEND_EMAIL + " TEXT NOT NULL, " +
+                COLUMN_FRIEND_NAME + " TEXT, " +
+                COLUMN_FRIEND_TOTAL_HABITS + " INTEGER DEFAULT 0, " +
+                COLUMN_FRIEND_TOTAL_POINTS + " INTEGER DEFAULT 0, " +
+                COLUMN_FRIEND_CURRENT_STREAK + " INTEGER DEFAULT 0, " +
+                COLUMN_FRIEND_ADDED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                "FOREIGN KEY(" + COLUMN_FRIEND_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + "), " +
+                "UNIQUE(" + COLUMN_FRIEND_USER_ID + ", " + COLUMN_FRIEND_EMAIL + ")" +
+                ")";
+        db.execSQL(createFriendsTable);
     }
 
     @Override
@@ -363,6 +392,24 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
             addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
             addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+        }
+
+        if (oldVersion < 12) {
+            // Migración a versión 12: Crear tabla de amigos
+            String createFriendsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_FRIENDS + " (" +
+                    COLUMN_FRIEND_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_FRIEND_USER_ID + " INTEGER NOT NULL, " +
+                    COLUMN_FRIEND_FRIEND_USER_ID + " INTEGER, " +
+                    COLUMN_FRIEND_EMAIL + " TEXT NOT NULL, " +
+                    COLUMN_FRIEND_NAME + " TEXT, " +
+                    COLUMN_FRIEND_TOTAL_HABITS + " INTEGER DEFAULT 0, " +
+                    COLUMN_FRIEND_TOTAL_POINTS + " INTEGER DEFAULT 0, " +
+                    COLUMN_FRIEND_CURRENT_STREAK + " INTEGER DEFAULT 0, " +
+                    COLUMN_FRIEND_ADDED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                    "FOREIGN KEY(" + COLUMN_FRIEND_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + "), " +
+                    "UNIQUE(" + COLUMN_FRIEND_USER_ID + ", " + COLUMN_FRIEND_EMAIL + ")" +
+                    ")";
+            db.execSQL(createFriendsTable);
         }
         if (oldVersion < 11) {
             // Migración a versión 11: Agregar columna title a diary_entries
@@ -1407,5 +1454,93 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         cursor.close();
         db.close();
         return count;
+    }
+
+    // ========== GESTIÓN DE AMIGOS ==========
+
+    /**
+     * Agrega un amigo a la lista del usuario actual
+     */
+    public long addFriend(long userId, long friendUserId, String friendEmail, String friendName) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_FRIEND_USER_ID, userId);
+        values.put(COLUMN_FRIEND_FRIEND_USER_ID, friendUserId);
+        values.put(COLUMN_FRIEND_EMAIL, friendEmail);
+        values.put(COLUMN_FRIEND_NAME, friendName);
+        values.put(COLUMN_FRIEND_ADDED_AT, System.currentTimeMillis() / 1000);
+        
+        long id = db.insertWithOnConflict(TABLE_FRIENDS, null, values, SQLiteDatabase.CONFLICT_IGNORE);
+        db.close();
+        return id;
+    }
+
+    /**
+     * Obtiene todos los amigos del usuario actual
+     */
+    public List<Friend> getAllFriends(long userId) {
+        List<Friend> friends = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_FRIENDS, null,
+                COLUMN_FRIEND_USER_ID + "=?",
+                new String[]{String.valueOf(userId)},
+                null, null, COLUMN_FRIEND_ADDED_AT + " DESC");
+
+        if (cursor.moveToFirst()) {
+            do {
+                Friend friend = new Friend();
+                friend.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_ID)));
+                friend.setUserId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_USER_ID)));
+                friend.setFriendUserId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_FRIEND_USER_ID)));
+                friend.setFriendEmail(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_EMAIL)));
+                friend.setFriendName(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_NAME)));
+                friend.setTotalHabits(cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_TOTAL_HABITS)));
+                friend.setTotalPoints(cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_TOTAL_POINTS)));
+                friend.setCurrentStreak(cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_CURRENT_STREAK)));
+                friend.setAddedAt(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_FRIEND_ADDED_AT)) * 1000);
+                friends.add(friend);
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        db.close();
+        return friends;
+    }
+
+    /**
+     * Elimina un amigo de la lista
+     */
+    public boolean deleteFriend(long friendId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int rowsAffected = db.delete(TABLE_FRIENDS, COLUMN_FRIEND_ID + "=?", new String[]{String.valueOf(friendId)});
+        db.close();
+        return rowsAffected > 0;
+    }
+
+    /**
+     * Actualiza las estadísticas de un amigo
+     */
+    public void updateFriendStats(long friendId, int totalHabits, int totalPoints, int currentStreak) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_FRIEND_TOTAL_HABITS, totalHabits);
+        values.put(COLUMN_FRIEND_TOTAL_POINTS, totalPoints);
+        values.put(COLUMN_FRIEND_CURRENT_STREAK, currentStreak);
+        db.update(TABLE_FRIENDS, values, COLUMN_FRIEND_ID + "=?", new String[]{String.valueOf(friendId)});
+        db.close();
+    }
+
+    /**
+     * Verifica si un amigo ya existe
+     */
+    public boolean friendExists(long userId, String friendEmail) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_FRIENDS, new String[]{COLUMN_FRIEND_ID},
+                COLUMN_FRIEND_USER_ID + "=? AND " + COLUMN_FRIEND_EMAIL + "=?",
+                new String[]{String.valueOf(userId), friendEmail},
+                null, null, null);
+        boolean exists = cursor.getCount() > 0;
+        cursor.close();
+        db.close();
+        return exists;
     }
 }

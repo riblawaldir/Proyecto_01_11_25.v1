@@ -130,7 +130,7 @@ public class SyncManager {
                 syncLock.unlock();
                 Log.d(TAG, "Lock de sincronización liberado (error al iniciar)");
             }
-            throw new RuntimeException("Error al iniciar sincronización", e);
+            throw  new RuntimeException("Error al iniciar sincronización", e);
         }
     }
 

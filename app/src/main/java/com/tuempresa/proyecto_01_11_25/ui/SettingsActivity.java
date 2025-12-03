@@ -469,7 +469,7 @@ public class SettingsActivity extends AppCompatActivity {
                         new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(this);
                     // Obtener userId antes de cerrar sesión
                     com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
-                        new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+                            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
                     long userId = sessionManager.getUserId();
                     
                     // Cerrar sesión

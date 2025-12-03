@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="16dp"
+    android:background="@drawable/bg_card"
+    android:layout_marginBottom="8dp"
+    android:gravity="center_vertical">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tvFriendName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Nombre del Amigo"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="#333333"/>
+
+        <TextView
+            android:id="@+id/tvFriendEmail"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="email@ejemplo.com"
+            android:textSize="12sp"
+            android:textColor="#757575"
+            android:layout_marginTop="4dp"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/tvFriendHabits"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0 hábitos"
+                android:textSize="12sp"
+                android:textColor="#757575"
+                android:layout_marginEnd="16dp"/>
+
+            <TextView
+                android:id="@+id/tvFriendPoints"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0 pts"
+                android:textSize="12sp"
+                android:textColor="#757575"
+                android:layout_marginEnd="16dp"/>
+
+            <TextView
+                android:id="@+id/tvFriendStreak"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0 días"
+                android:textSize="12sp"
+                android:textColor="#FF5722"
+                android:textStyle="bold"/>
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
+

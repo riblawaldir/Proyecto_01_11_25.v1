@@ -176,11 +176,10 @@ public class  HabitRepository {
                 
                 habit.setId(localId);
                 
-                // Notificar éxito inmediatamente
-                callback.onSuccess(habit);
-                
-                // 2. Si hay conexión, sincronizar con servidor
+                // 2. Si hay conexión, sincronizar con servidor PRIMERO
+                // No notificar éxito hasta que se sincronice (o se marque como pendiente)
                 if (connectionMonitor.isConnected()) {
+                    // Sincronizar y notificar éxito cuando termine
                     syncHabitToServer(habit, localId, callback);
                 } else {
                     // Marcar como no sincronizado y guardar como operación pendiente
@@ -188,6 +187,8 @@ public class  HabitRepository {
                     String habitJson = gson.toJson(habit);
                     dbHelper.savePendingOperation("CREATE", "HABIT", localId, habitJson);
                     Log.d(TAG, "Hábito creado offline, marcado como no sincronizado: " + localId);
+                    // Notificar éxito solo cuando está offline (no se sincronizará ahora)
+                    callback.onSuccess(habit);
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Error al crear hábito", e);
@@ -340,9 +341,21 @@ public class  HabitRepository {
                 @Override
                 public void onSuccess(Habit createdHabit) {
                     executorService.execute(() -> {
-                        // Marcar como sincronizado y guardar serverId
-                        dbHelper.markHabitAsSynced(localId, createdHabit.getId());
-                        callback.onSuccess(createdHabit);
+                        try {
+                            // CRÍTICO: Marcar como sincronizado ANTES de notificar éxito
+                            // Esto previene que refreshHabitsList() descargue el hábito y cree un duplicado
+                            dbHelper.markHabitAsSynced(localId, createdHabit.getId());
+                            Log.d(TAG, "Hábito sincronizado: localId=" + localId + ", serverId=" + createdHabit.getId());
+                            
+                            // Actualizar el hábito local con el serverId antes de notificar
+                            createdHabit.setId(localId); // Mantener el localId para la app
+                            
+                            // Notificar éxito DESPUÉS de marcar como sincronizado
+                            callback.onSuccess(createdHabit);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error al marcar hábito como sincronizado", e);
+                            callback.onError("Error al sincronizar hábito: " + e.getMessage());
+                        }
                     });
                 }
 
@@ -354,8 +367,9 @@ public class  HabitRepository {
                         dbHelper.markHabitAsUnsynced(localId);
                         String habitJson = gson.toJson(habit);
                         dbHelper.savePendingOperation("CREATE", "HABIT", localId, habitJson);
+                        // Notificar éxito de todas formas (está guardado localmente)
+                        callback.onSuccess(habit);
                     });
-                    callback.onError(error);
                 }
             });
         }
