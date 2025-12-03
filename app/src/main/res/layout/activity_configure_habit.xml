@@ -66,7 +66,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="16dp"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 app:boxStrokeColor="@color/orangeEnd"
                 app:hintTextColor="@color/orangeEnd"
@@ -77,6 +77,26 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:inputType="text" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <!-- Puntos personalizables -->
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                app:boxStrokeColor="@color/orangeEnd"
+                app:hintTextColor="@color/orangeEnd"
+                android:hint="Puntos por completar"
+                app:helperText="Puntos que recibirás al completar este hábito"
+                app:helperTextEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edtPoints"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:text="10" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <TextView

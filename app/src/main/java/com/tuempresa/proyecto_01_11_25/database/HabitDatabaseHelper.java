@@ -15,7 +15,7 @@ import java.util.List;
 public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "habitus.db";
-    private static final int DATABASE_VERSION = 12;
+    private static final int DATABASE_VERSION = 13;
     private final Context context;
 
     // Tabla de hábitos (protected para que HabitDatabaseHelperSync pueda acceder)
@@ -40,6 +40,8 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     protected static final String COLUMN_HABIT_JOURNAL_ENABLED = "journal_enabled";
     protected static final String COLUMN_HABIT_GYM_DAYS = "gym_days";
     protected static final String COLUMN_HABIT_WATER_GOAL_GLASSES = "water_goal_glasses";
+    protected static final String COLUMN_HABIT_WALK_GOAL_METERS = "walk_goal_meters";
+    protected static final String COLUMN_HABIT_WALK_GOAL_STEPS = "walk_goal_steps";
     protected static final String COLUMN_HABIT_ONE_CLICK_COMPLETE = "one_click_complete";
     protected static final String COLUMN_HABIT_ENGLISH_MODE = "english_mode";
     protected static final String COLUMN_HABIT_CODING_MODE = "coding_mode";
@@ -147,6 +149,8 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 COLUMN_HABIT_JOURNAL_ENABLED + " INTEGER DEFAULT 0, " +
                 COLUMN_HABIT_GYM_DAYS + " TEXT, " +
                 COLUMN_HABIT_WATER_GOAL_GLASSES + " INTEGER, " +
+                COLUMN_HABIT_WALK_GOAL_METERS + " INTEGER, " +
+                COLUMN_HABIT_WALK_GOAL_STEPS + " INTEGER, " +
                 COLUMN_HABIT_ONE_CLICK_COMPLETE + " INTEGER DEFAULT 0, " +
                 COLUMN_HABIT_ENGLISH_MODE + " INTEGER DEFAULT 0, " +
                 COLUMN_HABIT_CODING_MODE + " INTEGER DEFAULT 0, " +
@@ -282,6 +286,8 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_JOURNAL_ENABLED, "INTEGER DEFAULT 0");
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_GYM_DAYS, "TEXT");
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_WATER_GOAL_GLASSES, "INTEGER");
+            addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_WALK_GOAL_METERS, "INTEGER");
+            addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_WALK_GOAL_STEPS, "INTEGER");
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_ONE_CLICK_COMPLETE, "INTEGER DEFAULT 0");
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_ENGLISH_MODE, "INTEGER DEFAULT 0");
             addColumnIfNotExists(db, TABLE_HABITS, COLUMN_HABIT_CODING_MODE, "INTEGER DEFAULT 0");
@@ -567,6 +573,16 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 habit.setWaterGoalGlasses(cursor.getInt(waterGoalGlassesIndex));
             }
 
+            int walkGoalMetersIndex = cursor.getColumnIndex(COLUMN_HABIT_WALK_GOAL_METERS);
+            if (walkGoalMetersIndex >= 0 && !cursor.isNull(walkGoalMetersIndex)) {
+                habit.setWalkGoalMeters(cursor.getInt(walkGoalMetersIndex));
+            }
+
+            int walkGoalStepsIndex = cursor.getColumnIndex(COLUMN_HABIT_WALK_GOAL_STEPS);
+            if (walkGoalStepsIndex >= 0 && !cursor.isNull(walkGoalStepsIndex)) {
+                habit.setWalkGoalSteps(cursor.getInt(walkGoalStepsIndex));
+            }
+
             int oneClickCompleteIndex = cursor.getColumnIndex(COLUMN_HABIT_ONE_CLICK_COMPLETE);
             if (oneClickCompleteIndex >= 0 && !cursor.isNull(oneClickCompleteIndex)) {
                 habit.setOneClickComplete(cursor.getInt(oneClickCompleteIndex) == 1);
@@ -610,7 +626,7 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     public long insertHabit(String title, String goal, String category, String type, int points, double targetValue,
             String targetUnit) {
         return insertHabitFull(title, goal, category, type, points, targetValue != 0.0 ? (Double) targetValue : null,
-                targetUnit, null, null, null, null, null, null, null, null, null, null, null, null);
+                targetUnit, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     /**
@@ -654,8 +670,8 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             Double targetValue, String targetUnit,
             Integer pagesPerDay, String reminderTimes, Integer durationMinutes,
             Boolean dndMode, Integer musicId, Boolean journalEnabled,
-            String gymDays, Integer waterGoalGlasses, Boolean oneClickComplete,
-            Boolean englishMode, Boolean codingMode, String habitIcon) {
+            String gymDays, Integer waterGoalGlasses, Integer walkGoalMeters, Integer walkGoalSteps,
+            Boolean oneClickComplete, Boolean englishMode, Boolean codingMode, String habitIcon) {
         long userId = getCurrentUserId();
         
         // CRÍTICO: Verificar que el userId sea válido antes de guardar
@@ -695,6 +711,10 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             values.put(COLUMN_HABIT_GYM_DAYS, gymDays);
         if (waterGoalGlasses != null)
             values.put(COLUMN_HABIT_WATER_GOAL_GLASSES, waterGoalGlasses);
+        if (walkGoalMeters != null)
+            values.put(COLUMN_HABIT_WALK_GOAL_METERS, walkGoalMeters);
+        if (walkGoalSteps != null)
+            values.put(COLUMN_HABIT_WALK_GOAL_STEPS, walkGoalSteps);
         if (oneClickComplete != null)
             values.put(COLUMN_HABIT_ONE_CLICK_COMPLETE, oneClickComplete ? 1 : 0);
         if (englishMode != null)
@@ -711,13 +731,43 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     public long addScore(String habitTitle, int points) {
         long userId = getCurrentUserId();
+        if (userId <= 0) {
+            android.util.Log.e("HabitDatabaseHelper", "⚠️ No se puede guardar score: userId inválido (" + userId + ")");
+            return -1;
+        }
+        
         SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Verificar si ya existe un score para este hábito hoy (evitar duplicados)
+        long todayTimestamp = getTodayTimestamp();
+        Cursor cursor = db.query(TABLE_SCORES, new String[]{COLUMN_SCORE_ID},
+                COLUMN_SCORE_USER_ID + "=? AND " + COLUMN_SCORE_HABIT_TITLE + "=? AND " + COLUMN_SCORE_DATE + ">=?",
+                new String[]{String.valueOf(userId), habitTitle, String.valueOf(todayTimestamp)},
+                null, null, null);
+        
+        boolean scoreExistsToday = cursor.getCount() > 0;
+        cursor.close();
+        
+        if (scoreExistsToday) {
+            android.util.Log.d("HabitDatabaseHelper", "ℹ️ Score para hábito '" + habitTitle + "' ya existe hoy. No se guarda duplicado.");
+            db.close();
+            return -1;
+        }
+        
         ContentValues values = new ContentValues();
         values.put(COLUMN_SCORE_USER_ID, userId); // Asignar al usuario actual
         values.put(COLUMN_SCORE_HABIT_TITLE, habitTitle);
         values.put(COLUMN_SCORE_POINTS, points);
+        values.put(COLUMN_SCORE_DATE, System.currentTimeMillis() / 1000); // Fecha actual
         long id = db.insert(TABLE_SCORES, null, values);
         db.close();
+        
+        if (id > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "✅ Score guardado: " + points + " puntos para hábito '" + habitTitle + "' (usuario " + userId + ", scoreId: " + id + ")");
+        } else {
+            android.util.Log.e("HabitDatabaseHelper", "⚠️ Error al guardar score para hábito '" + habitTitle + "'");
+        }
+        
         return id;
     }
 
@@ -803,15 +853,15 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             double targetValue, String targetUnit) {
         return updateHabitFull(id, title, goal, category, type, points,
                 targetValue != 0.0 ? (Double) targetValue : null, targetUnit, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null, null);
     }
 
     public boolean updateHabitFull(long id, String title, String goal, String category, String type, int points,
             Double targetValue, String targetUnit,
             Integer pagesPerDay, String reminderTimes, Integer durationMinutes,
             Boolean dndMode, Integer musicId, Boolean journalEnabled,
-            String gymDays, Integer waterGoalGlasses, Boolean oneClickComplete,
-            Boolean englishMode, Boolean codingMode, String habitIcon) {
+            String gymDays, Integer waterGoalGlasses, Integer walkGoalMeters, Integer walkGoalSteps,
+            Boolean oneClickComplete, Boolean englishMode, Boolean codingMode, String habitIcon) {
         SQLiteDatabase db = this.getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_HABIT_TITLE, title);
@@ -840,6 +890,10 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             values.put(COLUMN_HABIT_GYM_DAYS, gymDays);
         if (waterGoalGlasses != null)
             values.put(COLUMN_HABIT_WATER_GOAL_GLASSES, waterGoalGlasses);
+        if (walkGoalMeters != null)
+            values.put(COLUMN_HABIT_WALK_GOAL_METERS, walkGoalMeters);
+        if (walkGoalSteps != null)
+            values.put(COLUMN_HABIT_WALK_GOAL_STEPS, walkGoalSteps);
         if (oneClickComplete != null)
             values.put(COLUMN_HABIT_ONE_CLICK_COMPLETE, oneClickComplete ? 1 : 0);
         if (englishMode != null)
@@ -856,23 +910,111 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     public boolean deleteHabit(long id) {
         SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Verificar si el hábito existe antes de eliminarlo
+        Cursor cursor = db.query(TABLE_HABITS, new String[]{COLUMN_HABIT_TITLE, COLUMN_HABIT_USER_ID},
+                COLUMN_HABIT_ID + "=?", new String[]{String.valueOf(id)}, null, null, null);
+        
+        String habitTitle = "desconocido";
+        long userId = 0;
+        if (cursor.moveToFirst()) {
+            habitTitle = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HABIT_TITLE));
+            userId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_HABIT_USER_ID));
+        }
+        cursor.close();
+        
         int rowsAffected = db.delete(TABLE_HABITS, COLUMN_HABIT_ID + "=?", new String[] { String.valueOf(id) });
         db.close();
+        
+        if (rowsAffected > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "✅ Hábito eliminado localmente: '" + habitTitle + "' (id: " + id + ", userId: " + userId + ")");
+        } else {
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ No se pudo eliminar hábito (id: " + id + "). Puede que no exista.");
+        }
+        
         return rowsAffected > 0;
     }
 
     public void updateHabitCompleted(String title, boolean completed) {
+        long currentUserId = getCurrentUserId();
+        if (currentUserId <= 0) {
+            android.util.Log.e("HabitDatabaseHelper", "⚠️ No se puede actualizar hábito: userId inválido (" + currentUserId + ")");
+            return;
+        }
+        
         SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Verificar el estado actual del hábito antes de actualizar
+        // IMPORTANTE: Filtrar por userId para evitar problemas al cambiar de cuenta
+        Cursor cursor = db.query(TABLE_HABITS, new String[]{COLUMN_HABIT_COMPLETED, COLUMN_HABIT_USER_ID, COLUMN_HABIT_ID},
+                COLUMN_HABIT_TITLE + "=? AND " + COLUMN_HABIT_USER_ID + "=?", 
+                new String[]{title, String.valueOf(currentUserId)}, null, null, null);
+        
+        boolean wasAlreadyCompleted = false;
+        long userId = 0;
+        long habitId = 0;
+        
+        if (cursor.moveToFirst()) {
+            wasAlreadyCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_HABIT_COMPLETED)) == 1;
+            userId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_HABIT_USER_ID));
+            habitId = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_HABIT_ID));
+        } else {
+            // Si no se encontró el hábito, puede ser que pertenezca a otro usuario
+            // o que no exista. En este caso, no hacemos nada.
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ Hábito '" + title + "' no encontrado para usuario " + currentUserId);
+            cursor.close();
+            db.close();
+            return;
+        }
+        cursor.close();
+        
+        // Actualizar el estado del hábito (solo para el usuario actual)
         ContentValues values = new ContentValues();
         values.put(COLUMN_HABIT_COMPLETED, completed ? 1 : 0);
-        db.update(TABLE_HABITS, values, COLUMN_HABIT_TITLE + "=?", new String[] { title });
+        int rowsUpdated = db.update(TABLE_HABITS, values, 
+                COLUMN_HABIT_TITLE + "=? AND " + COLUMN_HABIT_USER_ID + "=?", 
+                new String[] { title, String.valueOf(currentUserId) });
         db.close();
         
-        // Si se completó un hábito, incrementar contador diario para la racha
-        if (completed) {
-            long userId = getCurrentUserId();
-            incrementDailyHabitCompleted(userId);
+        if (rowsUpdated == 0) {
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ No se pudo actualizar hábito '" + title + "' para usuario " + currentUserId);
+            return;
         }
+        
+        // CRÍTICO: Si se completó un hábito Y no estaba ya completado antes, incrementar contador diario para la racha
+        // IMPORTANTE: Incrementamos el contador cuando se marca como completado, independientemente de si ya existe un score
+        // El score se guarda después, y addScore() previene duplicados. Esto asegura que el contador se incremente correctamente.
+        if (completed && !wasAlreadyCompleted) {
+            // Usar el userId del hábito o el usuario actual
+            if (userId <= 0) {
+                userId = currentUserId;
+            }
+            
+            if (userId > 0 && userId == currentUserId) {
+                android.util.Log.d("HabitDatabaseHelper", "✅ Hábito '" + title + "' completado (nuevo). Incrementando contador diario para usuario " + userId);
+                incrementDailyHabitCompleted(userId);
+            } else {
+                android.util.Log.e("HabitDatabaseHelper", "⚠️ No se pudo obtener userId válido para incrementar contador diario. Hábito: " + title + ", userId: " + userId + ", currentUserId: " + currentUserId);
+            }
+        } else if (completed && wasAlreadyCompleted) {
+            android.util.Log.d("HabitDatabaseHelper", "ℹ️ Hábito '" + title + "' ya estaba completado. No se incrementa el contador (evita duplicados).");
+        }
+    }
+    
+    /**
+     * Verifica si ya existe un score para un hábito hoy
+     */
+    private boolean checkScoreExistsToday(long habitId, String habitTitle, long userId) {
+        long todayTimestamp = getTodayTimestamp();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_SCORES, new String[]{COLUMN_SCORE_ID},
+                COLUMN_SCORE_USER_ID + "=? AND " + COLUMN_SCORE_HABIT_TITLE + "=? AND " + COLUMN_SCORE_DATE + ">=?",
+                new String[]{String.valueOf(userId), habitTitle, String.valueOf(todayTimestamp)},
+                null, null, null);
+        boolean exists = cursor.getCount() > 0;
+        cursor.close();
+        db.close();
+        return exists;
     }
 
     public int getHabitPoints(String title) {
@@ -1008,18 +1150,26 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         try {
             db.beginTransaction();
 
+            // Eliminar todos los amigos del usuario (relaciones donde el usuario es el propietario)
+            db.delete(TABLE_FRIENDS, COLUMN_FRIEND_USER_ID + "=?", new String[] { String.valueOf(userId) });
+
             // Eliminar todos los hábitos del usuario
             db.delete(TABLE_HABITS, COLUMN_HABIT_USER_ID + "=?", new String[] { String.valueOf(userId) });
 
             // Eliminar todos los puntajes del usuario
             db.delete(TABLE_SCORES, COLUMN_SCORE_USER_ID + "=?", new String[] { String.valueOf(userId) });
 
+            // Eliminar entradas de diario del usuario
+            db.delete(TABLE_DIARY_ENTRIES, COLUMN_DIARY_USER_ID + "=?", new String[] { String.valueOf(userId) });
+
             // Eliminar el usuario
             int rowsAffected = db.delete(TABLE_USERS, COLUMN_USER_ID + "=?", new String[] { String.valueOf(userId) });
 
             db.setTransactionSuccessful();
+            android.util.Log.d("HabitDatabaseHelper", "Usuario " + userId + " eliminado correctamente con todos sus datos relacionados");
             return rowsAffected > 0;
         } catch (Exception e) {
+            android.util.Log.e("HabitDatabaseHelper", "Error al eliminar usuario " + userId, e);
             e.printStackTrace();
             return false;
         } finally {
@@ -1293,6 +1443,59 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     }
 
     /**
+     * Resetea todos los hábitos completados al inicio del día
+     * Esto permite que los usuarios completen sus hábitos nuevamente cada día
+     * Solo resetea si es un nuevo día (después de las 00:00)
+     */
+    public void resetDailyCompletedHabits() {
+        long currentUserId = getCurrentUserId();
+        if (currentUserId <= 0) {
+            return;
+        }
+        
+        // Verificar si es un nuevo día
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.query(TABLE_USERS, new String[]{COLUMN_USER_LAST_ACTIVITY_DATE},
+                COLUMN_USER_ID + "=?", new String[]{String.valueOf(currentUserId)}, null, null, null);
+        
+        long todayTimestamp = getTodayTimestamp();
+        boolean shouldReset = false;
+        
+        if (cursor.moveToFirst()) {
+            long lastActivityDate = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_USER_LAST_ACTIVITY_DATE));
+            // Si la última actividad fue antes de hoy, resetear hábitos
+            if (lastActivityDate < todayTimestamp) {
+                shouldReset = true;
+            }
+        } else {
+            // Si no hay registro de actividad, resetear (primera vez)
+            shouldReset = true;
+        }
+        cursor.close();
+        db.close();
+        
+        if (!shouldReset) {
+            android.util.Log.d("HabitDatabaseHelper", "ℹ️ No es necesario resetear hábitos (mismo día)");
+            return;
+        }
+        
+        // Resetear hábitos completados
+        db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_HABIT_COMPLETED, 0);
+        
+        // Resetear solo hábitos del usuario actual
+        int rowsUpdated = db.update(TABLE_HABITS, values, 
+                COLUMN_HABIT_USER_ID + "=?", 
+                new String[]{String.valueOf(currentUserId)});
+        db.close();
+        
+        if (rowsUpdated > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "✅ " + rowsUpdated + " hábitos reseteados para el nuevo día (usuario " + currentUserId + ")");
+        }
+    }
+
+    /**
      * Verifica si es un nuevo día (después de las 00:00)
      * y resetea el contador diario si es necesario
      */
@@ -1308,6 +1511,34 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         
         long todayTimestamp = getTodayTimestamp();
         
+        // CRÍTICO: Verificar si el usuario existe, si no, crearlo
+        Cursor userCheck = db.query(TABLE_USERS, new String[]{COLUMN_USER_ID},
+                COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)}, null, null, null);
+        boolean userExists = userCheck.moveToFirst();
+        userCheck.close();
+        
+        if (!userExists) {
+            // Crear usuario si no existe (usando datos de SessionManager)
+            com.tuempresa.proyecto_01_11_25.utils.SessionManager session = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(context);
+            String userEmail = session.getUserEmail();
+            if (userEmail == null || userEmail.isEmpty()) {
+                userEmail = "user" + userId + "@local.com";
+            }
+            
+            ContentValues userValues = new ContentValues();
+            userValues.put(COLUMN_USER_ID, userId);
+            userValues.put(COLUMN_USER_EMAIL, userEmail);
+            userValues.put(COLUMN_USER_IS_ACTIVE, 1);
+            userValues.put(COLUMN_USER_CREATED_AT, System.currentTimeMillis());
+            userValues.put(COLUMN_USER_CURRENT_STREAK, 0);
+            userValues.put(COLUMN_USER_LAST_STREAK_DATE, 0);
+            userValues.put(COLUMN_USER_DAILY_HABITS_COMPLETED, 0);
+            userValues.put(COLUMN_USER_LAST_ACTIVITY_DATE, 0);
+            
+            long insertedId = db.insert(TABLE_USERS, null, userValues);
+            android.util.Log.d("HabitDatabaseHelper", "✅ Usuario " + userId + " creado en tabla users local (insertedId: " + insertedId + ")");
+        }
+        
         Cursor cursor = db.query(TABLE_USERS, 
                 new String[]{COLUMN_USER_LAST_ACTIVITY_DATE, COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK, COLUMN_USER_LAST_STREAK_DATE},
                 COLUMN_USER_ID + "=?", 
@@ -1318,28 +1549,40 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
             long lastActivityDate = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_USER_LAST_ACTIVITY_DATE));
             
             // Si la última actividad fue antes de hoy (00:00), resetear contador
-            if (lastActivityDate < todayTimestamp) {
+            // IMPORTANTE: lastActivityDate puede ser 0 (nunca inicializado), en cuyo caso también debemos resetear
+            // Pero si lastActivityDate == todayTimestamp, significa que ya hubo actividad hoy, NO resetear
+            if (lastActivityDate == 0 || lastActivityDate < todayTimestamp) {
                 ContentValues values = new ContentValues();
                 
                 // Si la última actividad fue ayer (mismo día calendario pero diferente timestamp)
-                long yesterdayTimestamp = todayTimestamp - 86400; // 24 horas en segundos
-                
-                if (lastActivityDate >= yesterdayTimestamp && lastActivityDate < todayTimestamp) {
-                    // Fue ayer, mantener la racha si se completaron 3+ hábitos
-                    int dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
-                    int currentStreak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+                // O si nunca hubo actividad (lastActivityDate == 0), simplemente resetear
+                if (lastActivityDate > 0) {
+                    long yesterdayTimestamp = todayTimestamp - 86400; // 24 horas en segundos
                     
-                    if (dailyHabitsCompleted >= 3) {
-                        // Se mantuvo la racha, incrementar
-                        values.put(COLUMN_USER_CURRENT_STREAK, currentStreak + 1);
-                        values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                    if (lastActivityDate >= yesterdayTimestamp && lastActivityDate < todayTimestamp) {
+                        // Fue ayer, mantener la racha si se completaron 3+ hábitos
+                        int dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+                        int currentStreak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+                        
+                        if (dailyHabitsCompleted >= 3) {
+                            // Se mantuvo la racha, incrementar
+                            values.put(COLUMN_USER_CURRENT_STREAK, currentStreak + 1);
+                            values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                            android.util.Log.d("HabitDatabaseHelper", "✅ Racha incrementada de " + currentStreak + " a " + (currentStreak + 1) + " días (usuario completó 3+ hábitos ayer)");
+                        } else {
+                            // No se completaron 3 hábitos, resetear racha
+                            values.put(COLUMN_USER_CURRENT_STREAK, 0);
+                            android.util.Log.d("HabitDatabaseHelper", "⚠️ Racha reseteada a 0 (usuario no completó 3+ hábitos ayer)");
+                        }
                     } else {
-                        // No se completaron 3 hábitos, resetear racha
+                        // Fue hace más de un día, resetear racha
                         values.put(COLUMN_USER_CURRENT_STREAK, 0);
+                        android.util.Log.d("HabitDatabaseHelper", "⚠️ Racha reseteada a 0 (última actividad fue hace más de un día)");
                     }
                 } else {
-                    // Fue hace más de un día, resetear racha
+                    // Nunca hubo actividad, resetear racha
                     values.put(COLUMN_USER_CURRENT_STREAK, 0);
+                    android.util.Log.d("HabitDatabaseHelper", "ℹ️ Inicializando racha (primera vez)");
                 }
                 
                 // Resetear contador diario
@@ -1347,7 +1590,14 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 values.put(COLUMN_USER_LAST_ACTIVITY_DATE, todayTimestamp);
                 
                 db.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
+                android.util.Log.d("HabitDatabaseHelper", "✅ Contador diario reseteado para nuevo día (usuario " + userId + ")");
+            } else {
+                // lastActivityDate >= todayTimestamp, significa que ya hubo actividad hoy
+                // No resetear, solo verificar que todo esté correcto
+                android.util.Log.d("HabitDatabaseHelper", "ℹ️ No es necesario resetear contador (última actividad fue hoy)");
             }
+        } else {
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ Usuario " + userId + " no encontrado en la base de datos");
         }
         cursor.close();
         db.close();
@@ -1370,6 +1620,34 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         
         long todayTimestamp = getTodayTimestamp();
         
+        // CRÍTICO: Verificar si el usuario existe, si no, crearlo
+        Cursor userCheck = db.query(TABLE_USERS, new String[]{COLUMN_USER_ID},
+                COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)}, null, null, null);
+        boolean userExists = userCheck.moveToFirst();
+        userCheck.close();
+        
+        if (!userExists) {
+            // Crear usuario si no existe (usando datos de SessionManager)
+            com.tuempresa.proyecto_01_11_25.utils.SessionManager session = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(context);
+            String userEmail = session.getUserEmail();
+            if (userEmail == null || userEmail.isEmpty()) {
+                userEmail = "user" + userId + "@local.com";
+            }
+            
+            ContentValues userValues = new ContentValues();
+            userValues.put(COLUMN_USER_ID, userId);
+            userValues.put(COLUMN_USER_EMAIL, userEmail);
+            userValues.put(COLUMN_USER_IS_ACTIVE, 1);
+            userValues.put(COLUMN_USER_CREATED_AT, System.currentTimeMillis());
+            userValues.put(COLUMN_USER_CURRENT_STREAK, 0);
+            userValues.put(COLUMN_USER_LAST_STREAK_DATE, 0);
+            userValues.put(COLUMN_USER_DAILY_HABITS_COMPLETED, 0);
+            userValues.put(COLUMN_USER_LAST_ACTIVITY_DATE, 0);
+            
+            long insertedId = db.insert(TABLE_USERS, null, userValues);
+            android.util.Log.d("HabitDatabaseHelper", "✅ Usuario " + userId + " creado en tabla users local (insertedId: " + insertedId + ")");
+        }
+        
         // Obtener valores actuales
         Cursor cursor = db.query(TABLE_USERS, 
                 new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK},
@@ -1383,24 +1661,58 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         if (cursor.moveToFirst()) {
             dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
             currentStreak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+        } else {
+            android.util.Log.e("HabitDatabaseHelper", "❌ ERROR CRÍTICO: Usuario " + userId + " no encontrado después de intentar crearlo");
+            cursor.close();
+            db.close();
+            return;
         }
         cursor.close();
         
         // Incrementar contador
         dailyHabitsCompleted++;
         
+        android.util.Log.d("HabitDatabaseHelper", "Incrementando contador diario. Antes: " + (dailyHabitsCompleted - 1) + ", Después: " + dailyHabitsCompleted + ", Racha actual: " + currentStreak);
+        
         ContentValues values = new ContentValues();
         values.put(COLUMN_USER_DAILY_HABITS_COMPLETED, dailyHabitsCompleted);
         values.put(COLUMN_USER_LAST_ACTIVITY_DATE, todayTimestamp);
         
-        // Si se alcanzan 3 hábitos completados y aún no tiene racha, iniciar racha
-        if (dailyHabitsCompleted == 3 && currentStreak == 0) {
-            values.put(COLUMN_USER_CURRENT_STREAK, 1);
-            values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+        // Si se alcanzan 3 hábitos completados, activar o mantener la racha
+        if (dailyHabitsCompleted >= 3) {
+            if (currentStreak == 0) {
+                // Iniciar racha si no tiene una activa
+                values.put(COLUMN_USER_CURRENT_STREAK, 1);
+                values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                android.util.Log.d("HabitDatabaseHelper", "✅ RACHA INICIADA: usuario completó " + dailyHabitsCompleted + " hábitos hoy. Racha establecida en 1 día.");
+            } else {
+                // Si ya tiene racha, asegurar que la fecha de última racha sea hoy
+                // (esto es importante para mantener la racha activa)
+                values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                android.util.Log.d("HabitDatabaseHelper", "✅ RACHA MANTENIDA: usuario ya tiene racha de " + currentStreak + " días. Completó " + dailyHabitsCompleted + " hábitos hoy.");
+            }
+        } else {
+            android.util.Log.d("HabitDatabaseHelper", "⚠️ Racha no activada aún. Hábitos completados hoy: " + dailyHabitsCompleted + " (se necesitan 3)");
         }
         
         db.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
         db.close();
+        
+        // Verificar que la actualización se guardó correctamente
+        android.util.Log.d("HabitDatabaseHelper", "Actualización guardada en BD. Verificando...");
+        SQLiteDatabase verifyDb = this.getReadableDatabase();
+        Cursor verifyCursor = verifyDb.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        if (verifyCursor.moveToFirst()) {
+            int verifyDaily = verifyCursor.getInt(verifyCursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+            int verifyStreak = verifyCursor.getInt(verifyCursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+            android.util.Log.d("HabitDatabaseHelper", "✅ Verificación: Hábitos completados hoy: " + verifyDaily + ", Racha actual: " + verifyStreak);
+        }
+        verifyCursor.close();
+        verifyDb.close();
     }
 
     /**
@@ -1408,21 +1720,44 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
      * @return La racha actual (0 si no tiene racha todavía)
      */
     public int getCurrentStreak(long userId) {
-        checkAndResetDailyCounter(userId);
+        // NO llamar a checkAndResetDailyCounter aquí porque puede resetear el contador
+        // justo después de que se recalcule. En su lugar, solo leer el valor.
         
         SQLiteDatabase db = this.getReadableDatabase();
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        
         Cursor cursor = db.query(TABLE_USERS, 
-                new String[]{COLUMN_USER_CURRENT_STREAK},
+                new String[]{COLUMN_USER_CURRENT_STREAK, COLUMN_USER_DAILY_HABITS_COMPLETED},
                 COLUMN_USER_ID + "=?", 
                 new String[]{String.valueOf(userId)}, 
                 null, null, null);
         
         int streak = 0;
+        int dailyHabitsCompleted = 0;
         if (cursor.moveToFirst()) {
             streak = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+            dailyHabitsCompleted = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
         }
         cursor.close();
         db.close();
+        
+        // CRÍTICO: Si se completaron 3 o más hábitos hoy pero la racha es 0, forzar la activación
+        // Esto maneja casos donde el incremento no se guardó correctamente o hubo un error
+        if (dailyHabitsCompleted >= 3 && streak == 0) {
+            android.util.Log.w("HabitDatabaseHelper", "❌ PROBLEMA CRÍTICO: Usuario completó " + dailyHabitsCompleted + " hábitos pero la racha es 0. Forzando activación de racha.");
+            SQLiteDatabase writeDb = this.getWritableDatabase();
+            long todayTimestamp = getTodayTimestamp();
+            ContentValues values = new ContentValues();
+            values.put(COLUMN_USER_CURRENT_STREAK, 1);
+            values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+            int rowsUpdated = writeDb.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
+            writeDb.close();
+            android.util.Log.d("HabitDatabaseHelper", "✅ Racha forzada a 1 día. Usuario: " + userId + ", Filas actualizadas: " + rowsUpdated);
+            return 1; // Devolver 1 ya que la racha acaba de ser activada
+        }
+        
+        android.util.Log.d("HabitDatabaseHelper", "📊 getCurrentStreak() - Usuario: " + userId + ", Racha: " + streak + ", Hábitos completados: " + dailyHabitsCompleted);
         return streak;
     }
 
@@ -1433,14 +1768,179 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         long userId = getCurrentUserId();
         return getCurrentStreak(userId);
     }
+    
+    /**
+     * Recalcula el contador de hábitos completados hoy basándose en los hábitos actualmente completados
+     * Útil cuando los hábitos se completaron antes de que se implementara el sistema de rachas
+     * o cuando hay inconsistencias en el contador
+     */
+    public void recalculateDailyHabitsCompleted(long userId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        
+        // Asegurar que las columnas de racha existan
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_CURRENT_STREAK, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+        
+        // Contar cuántos hábitos están completados hoy para este usuario
+        Cursor cursor = db.query(TABLE_HABITS, 
+                new String[]{COLUMN_HABIT_ID},
+                COLUMN_HABIT_USER_ID + "=? AND " + COLUMN_HABIT_COMPLETED + "=1",
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        int completedHabitsCount = cursor.getCount();
+        cursor.close();
+        db.close();
+        
+        android.util.Log.d("HabitDatabaseHelper", "🔄 Recalculando hábitos completados: " + completedHabitsCount + " hábitos completados para usuario " + userId);
+        
+        // CRÍTICO: Verificar si el usuario existe por user_id, si no, crearlo
+        db = this.getWritableDatabase();
+        Cursor userCheck = db.query(TABLE_USERS, new String[]{COLUMN_USER_ID},
+                COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)}, null, null, null);
+        boolean userExists = userCheck.moveToFirst();
+        userCheck.close();
+        
+        if (!userExists) {
+            // Crear usuario si no existe con este user_id específico
+            com.tuempresa.proyecto_01_11_25.utils.SessionManager session = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(context);
+            String userEmail = session.getUserEmail();
+            if (userEmail == null || userEmail.isEmpty()) {
+                userEmail = "user" + userId + "@local.com";
+            }
+            
+            // Verificar si el usuario existe por email (puede haber sido creado con otro userId)
+            Cursor emailCheck = db.query(TABLE_USERS, new String[]{COLUMN_USER_ID, COLUMN_USER_EMAIL},
+                    COLUMN_USER_EMAIL + "=?", new String[]{userEmail}, null, null, null);
+            boolean emailExists = emailCheck.moveToFirst();
+            long existingUserId = -1;
+            if (emailExists) {
+                existingUserId = emailCheck.getLong(emailCheck.getColumnIndexOrThrow(COLUMN_USER_ID));
+            }
+            emailCheck.close();
+            
+            if (emailExists && existingUserId != userId) {
+                // El usuario existe pero con otro user_id, actualizar el user_id
+                android.util.Log.w("HabitDatabaseHelper", "⚠️ Usuario con email " + userEmail + " existe con user_id " + existingUserId + ", pero necesitamos " + userId + ". Actualizando...");
+                ContentValues updateValues = new ContentValues();
+                updateValues.put(COLUMN_USER_ID, userId);
+                int updated = db.update(TABLE_USERS, updateValues, COLUMN_USER_EMAIL + "=?", new String[]{userEmail});
+                if (updated > 0) {
+                    android.util.Log.d("HabitDatabaseHelper", "✅ Usuario actualizado: user_id cambiado de " + existingUserId + " a " + userId);
+                } else {
+                    android.util.Log.e("HabitDatabaseHelper", "❌ No se pudo actualizar user_id del usuario con email " + userEmail);
+                }
+            } else if (!emailExists) {
+                // El usuario no existe, crearlo
+                ContentValues userValues = new ContentValues();
+                userValues.put(COLUMN_USER_ID, userId);
+                userValues.put(COLUMN_USER_EMAIL, userEmail);
+                userValues.put(COLUMN_USER_IS_ACTIVE, 1);
+                userValues.put(COLUMN_USER_CREATED_AT, System.currentTimeMillis());
+                userValues.put(COLUMN_USER_CURRENT_STREAK, 0);
+                userValues.put(COLUMN_USER_LAST_STREAK_DATE, 0);
+                userValues.put(COLUMN_USER_DAILY_HABITS_COMPLETED, 0);
+                userValues.put(COLUMN_USER_LAST_ACTIVITY_DATE, 0);
+                
+                long insertedId = db.insert(TABLE_USERS, null, userValues);
+                if (insertedId != -1) {
+                    android.util.Log.d("HabitDatabaseHelper", "✅ Usuario " + userId + " creado en recalculateDailyHabitsCompleted (insertedId: " + insertedId + ")");
+                } else {
+                    android.util.Log.e("HabitDatabaseHelper", "❌ No se pudo crear usuario " + userId + " (puede que ya exista)");
+                }
+            }
+        }
+        
+        long todayTimestamp = getTodayTimestamp();
+        
+        // Obtener valores actuales del usuario
+        Cursor userCursor = db.query(TABLE_USERS, 
+                new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED, COLUMN_USER_CURRENT_STREAK, COLUMN_USER_LAST_ACTIVITY_DATE},
+                COLUMN_USER_ID + "=?", 
+                new String[]{String.valueOf(userId)}, 
+                null, null, null);
+        
+        int currentStreak = 0;
+        long lastActivityDate = 0;
+        if (userCursor.moveToFirst()) {
+            currentStreak = userCursor.getInt(userCursor.getColumnIndexOrThrow(COLUMN_USER_CURRENT_STREAK));
+            lastActivityDate = userCursor.getLong(userCursor.getColumnIndexOrThrow(COLUMN_USER_LAST_ACTIVITY_DATE));
+        }
+        userCursor.close();
+        
+        // CRÍTICO: Si la última actividad fue antes de hoy Y hay hábitos completados hoy,
+        // significa que es un nuevo día pero el usuario ya completó hábitos hoy.
+        // En este caso, NO resetear el contador, solo actualizarlo con los hábitos completados.
+        // Si la última actividad fue hoy, también actualizar normalmente.
+        
+        // Actualizar contador con el valor recalculado
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_USER_DAILY_HABITS_COMPLETED, completedHabitsCount);
+        values.put(COLUMN_USER_LAST_ACTIVITY_DATE, todayTimestamp);
+        
+        // Si la última actividad fue antes de hoy y hay hábitos completados, 
+        // verificar si debemos mantener o resetear la racha
+        if (lastActivityDate > 0 && lastActivityDate < todayTimestamp && completedHabitsCount > 0) {
+            // Es un nuevo día pero hay hábitos completados hoy
+            // Verificar si ayer se completaron 3+ hábitos para mantener la racha
+            long yesterdayTimestamp = todayTimestamp - 86400;
+            if (lastActivityDate >= yesterdayTimestamp && lastActivityDate < todayTimestamp) {
+                // Fue ayer, verificar si se completaron 3+ hábitos ayer
+                // (esto se maneja en checkAndResetDailyCounter, pero aquí solo actualizamos el contador de hoy)
+                android.util.Log.d("HabitDatabaseHelper", "ℹ️ Nuevo día detectado. Hábitos completados hoy: " + completedHabitsCount);
+            }
+        }
+        
+        // Si se alcanzan 3 hábitos completados, activar o mantener la racha
+        if (completedHabitsCount >= 3) {
+            if (currentStreak == 0) {
+                // Iniciar racha si no tiene una activa
+                values.put(COLUMN_USER_CURRENT_STREAK, 1);
+                values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                android.util.Log.d("HabitDatabaseHelper", "✅ RACHA INICIADA (recalculada): usuario tiene " + completedHabitsCount + " hábitos completados. Racha establecida en 1 día.");
+            } else {
+                // Si ya tiene racha, asegurar que la fecha de última racha sea hoy
+                values.put(COLUMN_USER_LAST_STREAK_DATE, todayTimestamp);
+                android.util.Log.d("HabitDatabaseHelper", "✅ RACHA MANTENIDA (recalculada): usuario ya tiene racha de " + currentStreak + " días. Tiene " + completedHabitsCount + " hábitos completados hoy.");
+            }
+        } else {
+            android.util.Log.d("HabitDatabaseHelper", "⚠️ Racha no activada (recalculada). Hábitos completados: " + completedHabitsCount + " (se necesitan 3)");
+        }
+        
+        int rowsUpdated = db.update(TABLE_USERS, values, COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)});
+        
+        if (rowsUpdated == 0) {
+            android.util.Log.w("HabitDatabaseHelper", "⚠️ No se actualizó ninguna fila. Verificando si el usuario existe...");
+            // Verificar si el usuario existe
+            Cursor verifyUser = db.query(TABLE_USERS, new String[]{COLUMN_USER_ID},
+                    COLUMN_USER_ID + "=?", new String[]{String.valueOf(userId)}, null, null, null);
+            boolean userExistsInDb = verifyUser.moveToFirst();
+            verifyUser.close();
+            
+            if (!userExistsInDb) {
+                android.util.Log.e("HabitDatabaseHelper", "❌ Usuario " + userId + " no existe en la tabla users. No se puede actualizar la racha.");
+            } else {
+                android.util.Log.e("HabitDatabaseHelper", "❌ Usuario " + userId + " existe pero la actualización falló. Valores: " + values.toString());
+            }
+        } else {
+            android.util.Log.d("HabitDatabaseHelper", "✅ Recalculación completada. Filas actualizadas: " + rowsUpdated + ", Hábitos completados: " + completedHabitsCount + ", Racha: " + (completedHabitsCount >= 3 ? "1" : "0"));
+        }
+        
+        db.close();
+    }
 
     /**
      * Obtiene el número de hábitos completados hoy
      */
     public int getDailyHabitsCompleted(long userId) {
-        checkAndResetDailyCounter(userId);
+        // NO llamar a checkAndResetDailyCounter aquí porque puede resetear el contador
+        // justo después de que se recalcule. En su lugar, recalcular si es necesario.
         
         SQLiteDatabase db = this.getReadableDatabase();
+        addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
+        
         Cursor cursor = db.query(TABLE_USERS, 
                 new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED},
                 COLUMN_USER_ID + "=?", 
@@ -1448,10 +1948,40 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 null, null, null);
         
         int count = 0;
-        if (cursor.moveToFirst()) {
+        boolean userExists = cursor.moveToFirst();
+        if (userExists) {
             count = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
         }
         cursor.close();
+        
+        // Si el usuario no existe o el contador es 0, verificar si hay hábitos completados
+        if (!userExists || count == 0) {
+            Cursor habitsCursor = db.query(TABLE_HABITS, 
+                    new String[]{COLUMN_HABIT_ID},
+                    COLUMN_HABIT_USER_ID + "=? AND " + COLUMN_HABIT_COMPLETED + "=1",
+                    new String[]{String.valueOf(userId)}, 
+                    null, null, null);
+            int completedHabits = habitsCursor.getCount();
+            habitsCursor.close();
+            
+            if (completedHabits > 0) {
+                android.util.Log.w("HabitDatabaseHelper", "⚠️ Contador es " + count + " pero hay " + completedHabits + " hábitos completados. Recalculando...");
+                db.close(); // Cerrar antes de recalcular
+                recalculateDailyHabitsCompleted(userId);
+                // Leer de nuevo
+                db = this.getReadableDatabase();
+                cursor = db.query(TABLE_USERS, 
+                        new String[]{COLUMN_USER_DAILY_HABITS_COMPLETED},
+                        COLUMN_USER_ID + "=?", 
+                        new String[]{String.valueOf(userId)}, 
+                        null, null, null);
+                if (cursor.moveToFirst()) {
+                    count = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_USER_DAILY_HABITS_COMPLETED));
+                }
+                cursor.close();
+            }
+        }
+        
         db.close();
         return count;
     }

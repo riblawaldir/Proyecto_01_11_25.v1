@@ -37,6 +37,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
     private SessionManager sessionManager; // Para obtener userId del usuario logueado
     private LinearLayout containerConfig;
     private TextInputEditText edtHabitName;
+    private TextInputEditText edtPoints;
     private MaterialButton btnSave;
     private long habitIdToEdit = -1; // -1 si es nuevo, >0 si es edición
     private Habit habitToEdit = null;
@@ -77,14 +78,17 @@ public class ConfigureHabitActivity extends AppCompatActivity {
 
         containerConfig = findViewById(R.id.containerConfig);
         edtHabitName = findViewById(R.id.edtHabitName);
+        edtPoints = findViewById(R.id.edtPoints);
         btnSave = findViewById(R.id.btnSave);
         
         TextView titleView = findViewById(R.id.titleConfigure);
         if (habitIdToEdit > 0) {
             titleView.setText(getString(R.string.edit_habit_title) + ": " + habitToEdit.getTitle());
             edtHabitName.setText(habitToEdit.getTitle());
+            edtPoints.setText(String.valueOf(habitToEdit.getPoints()));
         } else {
             titleView.setText(getTitleForType(habitType));
+            edtPoints.setText("10"); // Valor por defecto
         }
         
         findViewById(R.id.btnBack).setOnClickListener(v -> finish());
@@ -231,6 +235,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             case JOURNALING: return getString(R.string.configure_journaling_title);
             case GYM: return getString(R.string.configure_gym_title);
             case WATER: return getString(R.string.configure_water_title);
+            case WALK: return "Configurar Caminar";
             case COLD_SHOWER: return getString(R.string.configure_cold_shower_title);
             case ENGLISH: return getString(R.string.configure_english_title);
             case CODING: return getString(R.string.configure_coding_title);
@@ -259,6 +264,9 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                 break;
             case WATER:
                 loadWaterConfig();
+                break;
+            case WALK:
+                loadWalkConfig();
                 break;
             case COLD_SHOWER:
                 loadColdShowerConfig();
@@ -362,6 +370,64 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         containerConfig.addView(view);
     }
 
+    private void loadWalkConfig() {
+        View view = getLayoutInflater().inflate(R.layout.config_walk, containerConfig, false);
+        
+        android.widget.RadioGroup radioGroup = view.findViewById(R.id.radioGroupWalkType);
+        android.widget.RadioButton radioMeters = view.findViewById(R.id.radioMeters);
+        android.widget.RadioButton radioSteps = view.findViewById(R.id.radioSteps);
+        com.google.android.material.textfield.TextInputLayout layoutMeters = view.findViewById(R.id.layoutWalkMeters);
+        com.google.android.material.textfield.TextInputLayout layoutSteps = view.findViewById(R.id.layoutWalkSteps);
+        
+        // Cambiar visibilidad según selección
+        radioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.radioMeters) {
+                layoutMeters.setVisibility(android.view.View.VISIBLE);
+                layoutSteps.setVisibility(android.view.View.GONE);
+            } else {
+                layoutMeters.setVisibility(android.view.View.GONE);
+                layoutSteps.setVisibility(android.view.View.VISIBLE);
+            }
+        });
+        
+        containerConfig.addView(view);
+    }
+    
+    private android.util.Pair<Integer, Integer> getWalkGoals() {
+        View configView = containerConfig.getChildAt(0);
+        if (configView != null) {
+            android.widget.RadioGroup radioGroup = configView.findViewById(R.id.radioGroupWalkType);
+            com.google.android.material.textfield.TextInputEditText edtMeters = configView.findViewById(R.id.edtWalkMeters);
+            com.google.android.material.textfield.TextInputEditText edtSteps = configView.findViewById(R.id.edtWalkSteps);
+
+            Integer meters = null;
+            Integer steps = null;
+
+            if (radioGroup != null && radioGroup.getCheckedRadioButtonId() == R.id.radioMeters) {
+                // Usar metros
+                if (edtMeters != null && edtMeters.getText() != null && !edtMeters.getText().toString().trim().isEmpty()) {
+                    try {
+                        meters = Integer.parseInt(edtMeters.getText().toString().trim());
+                    } catch (NumberFormatException e) {
+                        // Handled by validator
+                    }
+                }
+            } else if (radioGroup != null && radioGroup.getCheckedRadioButtonId() == R.id.radioSteps) {
+                // Usar pasos
+                if (edtSteps != null && edtSteps.getText() != null && !edtSteps.getText().toString().trim().isEmpty()) {
+                    try {
+                        steps = Integer.parseInt(edtSteps.getText().toString().trim());
+                    } catch (NumberFormatException e) {
+                        // Handled by validator
+                    }
+                }
+            }
+            
+            return new android.util.Pair<>(meters, steps);
+        }
+        return new android.util.Pair<>(null, null);
+    }
+
     private void saveHabit() {
         String name = edtHabitName.getText() != null ? edtHabitName.getText().toString().trim() : "";
         
@@ -383,6 +449,8 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         Boolean journalEnabled = null;
         String gymDays = null;
         Integer waterGoalGlasses = null;
+        Integer walkGoalMeters = null;
+        Integer walkGoalSteps = null;
         Boolean oneClickComplete = null;
         Boolean englishMode = null;
         Boolean codingMode = null;
@@ -433,6 +501,15 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                     return;
                 }
                 break;
+            case WALK:
+                android.util.Pair<Integer, Integer> walkGoals = getWalkGoals();
+                walkGoalMeters = walkGoals.first;
+                walkGoalSteps = walkGoals.second;
+                if (walkGoalMeters == null && walkGoalSteps == null) {
+                    // Usar valores por defecto
+                    walkGoalMeters = 500;
+                }
+                break;
             case COLD_SHOWER:
                 oneClickComplete = true;
                 break;
@@ -458,6 +535,20 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             return;
         }
         
+        // Obtener puntos personalizados
+        int points = 10; // Valor por defecto
+        try {
+            String pointsStr = edtPoints.getText() != null ? edtPoints.getText().toString().trim() : "";
+            if (!pointsStr.isEmpty()) {
+                points = Integer.parseInt(pointsStr);
+                if (points < 1) points = 1; // Mínimo 1 punto
+                if (points > 1000) points = 1000; // Máximo 1000 puntos
+            }
+        } catch (NumberFormatException e) {
+            android.util.Log.w("ConfigureHabit", "Error al parsear puntos, usando valor por defecto: 10");
+            points = 10;
+        }
+        
         // Crear objeto Habit
         Habit habit = new Habit();
         habit.setUserId(userId); // CRÍTICO: Establecer userId del usuario logueado
@@ -465,7 +556,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         habit.setGoal(getGoalForType(habitType));
         habit.setCategory(getCategoryForType(habitType));
         habit.setType(habitType);
-        habit.setPoints(10); // puntos por defecto (TODO: hacer personalizable)
+        habit.setPoints(points); // Puntos personalizables
         habit.setPagesPerDay(pagesPerDay);
         habit.setReminderTimes(reminderTimes);
         habit.setDurationMinutes(durationMinutes);
@@ -474,6 +565,8 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         habit.setJournalEnabled(journalEnabled);
         habit.setGymDays(gymDays);
         habit.setWaterGoalGlasses(waterGoalGlasses);
+        habit.setWalkGoalMeters(walkGoalMeters);
+        habit.setWalkGoalSteps(walkGoalSteps);
         habit.setOneClickComplete(oneClickComplete);
         habit.setEnglishMode(englishMode);
         habit.setCodingMode(codingMode);
@@ -589,6 +682,27 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                     edtGlasses.setText(String.valueOf(habitToEdit.getWaterGoalGlasses()));
                 }
                 break;
+            case WALK:
+                android.widget.RadioButton radioMeters = configView.findViewById(R.id.radioMeters);
+                android.widget.RadioButton radioSteps = configView.findViewById(R.id.radioSteps);
+                TextInputEditText edtMeters = configView.findViewById(R.id.edtWalkMeters);
+                TextInputEditText edtSteps = configView.findViewById(R.id.edtWalkSteps);
+                
+                if (habitToEdit.getWalkGoalMeters() != null && edtMeters != null) {
+                    edtMeters.setText(String.valueOf(habitToEdit.getWalkGoalMeters()));
+                    if (radioMeters != null) radioMeters.setChecked(true);
+                } else if (habitToEdit.getWalkGoalSteps() != null && edtSteps != null) {
+                    edtSteps.setText(String.valueOf(habitToEdit.getWalkGoalSteps()));
+                    if (radioSteps != null) radioSteps.setChecked(true);
+                    // Cambiar visibilidad
+                    if (configView.findViewById(R.id.layoutWalkMeters) != null) {
+                        configView.findViewById(R.id.layoutWalkMeters).setVisibility(android.view.View.GONE);
+                    }
+                    if (configView.findViewById(R.id.layoutWalkSteps) != null) {
+                        configView.findViewById(R.id.layoutWalkSteps).setVisibility(android.view.View.VISIBLE);
+                    }
+                }
+                break;
             case MEDITATE:
                 TextInputEditText edtDuration = configView.findViewById(R.id.edtDuration);
                 if (edtDuration != null && habitToEdit.getDurationMinutes() != null) {
@@ -636,6 +750,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             case JOURNALING: return "Escribir en el diario";
             case GYM: return "Ir al gym";
             case WATER: return "Beber agua";
+            case WALK: return "Caminar";
             case COLD_SHOWER: return "Ducha fría";
             case ENGLISH: return "Practicar inglés";
             case CODING: return "Practicar coding";
@@ -654,6 +769,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
             case MEDITATE:
             case GYM:
             case WATER:
+            case WALK:
             case COLD_SHOWER:
                 return "salud";
             default:

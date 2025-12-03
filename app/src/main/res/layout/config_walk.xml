@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/padding_medium">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Meta de Caminar"
+        android:textStyle="bold"
+        android:textColor="@color/textDark"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Elige cómo quieres medir tu meta:"
+        android:textSize="14sp"
+        android:textColor="@color/textLight"
+        android:layout_marginBottom="12dp"/>
+
+    <RadioGroup
+        android:id="@+id/radioGroupWalkType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="16dp">
+
+        <RadioButton
+            android:id="@+id/radioMeters"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Distancia (metros)"
+            android:checked="true"
+            android:textSize="16sp"/>
+
+        <RadioButton
+            android:id="@+id/radioSteps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Pasos"
+            android:textSize="16sp"/>
+
+    </RadioGroup>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutWalkMeters"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="@color/orangeEnd"
+        android:hint="Metros a caminar"
+        android:layout_marginBottom="16dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edtWalkMeters"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:text="500"
+            android:textSize="18sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutWalkSteps"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        app:boxStrokeColor="@color/orangeEnd"
+        android:hint="Pasos a caminar"
+        android:visibility="gone">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/edtWalkSteps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:text="5000"
+            android:textSize="18sp" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="💡 Tip: 500 metros ≈ 650 pasos | 1000 metros ≈ 1300 pasos"
+        android:textSize="12sp"
+        android:textColor="@color/textLight"
+        android:layout_marginTop="8dp"
+        android:padding="8dp"
+        android:background="#F5F5F5"
+        android:gravity="center"/>
+
+</LinearLayout>
+

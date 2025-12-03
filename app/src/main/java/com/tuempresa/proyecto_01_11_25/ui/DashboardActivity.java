@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -204,6 +205,10 @@ public class DashboardActivity extends AppCompatActivity {
             // Especialmente importante cuando se cambia de usuario
             dbHelper.deleteHabitsNotBelongingToCurrentUser();
             android.util.Log.d("Dashboard", "✅ Hábitos de otros usuarios eliminados. Cargando hábitos del usuario " + currentUserId);
+            
+            // CRÍTICO: Resetear hábitos completados al inicio del día
+            // Esto permite que los usuarios completen sus hábitos nuevamente cada día
+            dbHelper.resetDailyCompletedHabits();
         } else {
             android.util.Log.w("Dashboard", "⚠️ No hay usuario logueado. Redirigiendo a LoginActivity.");
             // Si no hay sesión, redirigir a LoginActivity
@@ -227,7 +232,8 @@ public class DashboardActivity extends AppCompatActivity {
         adapter = new HabitAdapter(new ArrayList<>(),
                 this::completeDemoHabit,
                 this::editHabit,
-                this::deleteHabit);
+                this::deleteHabit,
+                this::quickCompleteHabit);
         rv.setAdapter(adapter);
 
         btnMap = findViewById(R.id.btnMap);
@@ -841,11 +847,6 @@ public class DashboardActivity extends AppCompatActivity {
             mainHandler.removeCallbacksAndMessages(null);
         }
 
-        // Cerrar ExecutorService
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
-        }
-
         // Detener sensores
         if (walkSensor != null)
             walkSensor.stop();
@@ -1297,6 +1298,81 @@ public class DashboardActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Completa un hábito rápidamente desde el botón del card (sin abrir actividad)
+     */
+    private void quickCompleteHabit(Habit h) {
+        if (h.isCompleted()) {
+            // Si ya está completado, desmarcarlo (toggle)
+            h.setCompleted(false);
+            dbHelper.updateHabitCompleted(h.getTitle(), false);
+            saveHabitsState();
+            int position = habits.indexOf(h);
+            if (position >= 0) {
+                adapter.notifyItemChanged(position);
+            } else {
+                adapter.notifyDataSetChanged();
+            }
+            return;
+        }
+        
+        // Completar el hábito
+        h.setCompleted(true);
+        dbHelper.updateHabitCompleted(h.getTitle(), true);
+
+        // Actualizar hábito en API
+        habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
+            @Override
+            public void onSuccess(Habit updatedHabit) {
+                android.util.Log.d("Dashboard", "Hábito completado rápidamente: " + h.getTitle());
+            }
+
+            @Override
+            public void onError(String error) {
+                android.util.Log.e("Dashboard", "Error al actualizar hábito: " + error);
+            }
+        });
+
+        // Agregar puntos
+        int points = h.getPoints();
+        habitRepository.addScore(h.getId(), h.getTitle(), points,
+                new HabitRepository.RepositoryCallback<Void>() {
+                    @Override
+                    public void onSuccess(Void data) {
+                        runOnUiThread(() -> {
+                            // Animación visual de éxito
+                            int position = habits.indexOf(h);
+                            if (position >= 0) {
+                                adapter.notifyItemChanged(position);
+                                
+                                // Mostrar feedback visual breve
+                                View itemView = rv.getLayoutManager().findViewByPosition(position);
+                                if (itemView != null) {
+                                    itemView.animate()
+                                        .scaleX(1.1f)
+                                        .scaleY(1.1f)
+                                        .setDuration(200)
+                                        .withEndAction(() -> itemView.animate()
+                                            .scaleX(1.0f)
+                                            .scaleY(1.0f)
+                                            .setDuration(200)
+                                            .start())
+                                        .start();
+                                }
+                            }
+                        });
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        android.util.Log.e("Dashboard", "Error al guardar score: " + error);
+                    }
+                });
+        
+        saveHabitsState();
+        addLocationEvent(h.getTitle() + " ✅ Completado", HabitEvent.HabitType.DEMO);
+    }
+
     /** Maneja el click en un hábito según su tipo */
     private void completeDemoHabit(Habit h) {
         // Si ya está completado, desmarcarlo (toggle) - solo para DEMO
@@ -1318,7 +1394,6 @@ public class DashboardActivity extends AppCompatActivity {
         switch (h.getType()) {
             case READ_BOOK:
             case WATER:
-            case COLD_SHOWER:
                 startActivityForResult(new Intent(this, HabitDetailActivity.class)
                         .putExtra("habit_id", h.getId()), 300);
                 break;
@@ -1332,7 +1407,10 @@ public class DashboardActivity extends AppCompatActivity {
                 break;
             case DEMO:
             case VITAMINS:
-                // Completar manualmente (DEMO o VITAMINS)
+            case COLD_SHOWER:
+            case ENGLISH:
+            case CODING:
+                // Completar manualmente (tipos que permiten completado rápido)
                 h.setCompleted(true);
                 dbHelper.updateHabitCompleted(h.getTitle(), true);
 
@@ -1375,6 +1453,10 @@ public class DashboardActivity extends AppCompatActivity {
                 break;
             case EXERCISE:
             case WALK:
+                // Abrir WalkDetailActivity para ver progreso y estadísticas
+                startActivityForResult(new Intent(this, WalkDetailActivity.class)
+                        .putExtra("habit_id", h.getId()), 303);
+                break;
             case READ:
                 // Toast eliminado - usuario no quiere mensajes constantes
                 break;

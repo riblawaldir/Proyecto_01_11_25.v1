@@ -107,8 +107,8 @@ public class BackupManager {
                                 habit.getType().name(), habit.getPoints(), habit.getTargetValue(), habit.getTargetUnit(),
                                 habit.getPagesPerDay(), habit.getReminderTimes(), habit.getDurationMinutes(),
                                 habit.isDndMode(), habit.getMusicId(), habit.isJournalEnabled(),
-                                habit.getGymDays(), habit.getWaterGoalGlasses(), habit.isOneClickComplete(),
-                                habit.isEnglishMode(), habit.isCodingMode(), habit.getHabitIcon());
+                                habit.getGymDays(), habit.getWaterGoalGlasses(), habit.getWalkGoalMeters(), habit.getWalkGoalSteps(),
+                                habit.isOneClickComplete(), habit.isEnglishMode(), habit.isCodingMode(), habit.getHabitIcon());
                         // También actualizar estado completado
                         dbHelper.updateHabitCompleted(habit.getTitle(), habit.isCompleted());
                     } else {
@@ -117,8 +117,8 @@ public class BackupManager {
                                 habit.getType().name(), habit.getPoints(), habit.getTargetValue(), habit.getTargetUnit(),
                                 habit.getPagesPerDay(), habit.getReminderTimes(), habit.getDurationMinutes(),
                                 habit.isDndMode(), habit.getMusicId(), habit.isJournalEnabled(),
-                                habit.getGymDays(), habit.getWaterGoalGlasses(), habit.isOneClickComplete(),
-                                habit.isEnglishMode(), habit.isCodingMode(), habit.getHabitIcon());
+                                habit.getGymDays(), habit.getWaterGoalGlasses(), habit.getWalkGoalMeters(), habit.getWalkGoalSteps(),
+                                habit.isOneClickComplete(), habit.isEnglishMode(), habit.isCodingMode(), habit.getHabitIcon());
                     }
                     habitsRestored++;
                 }

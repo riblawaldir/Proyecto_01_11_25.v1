@@ -63,6 +63,20 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
 
+                <!-- Botón de completado rápido (solo si no está completado) -->
+                <ImageButton
+                    android:id="@+id/btnQuickComplete"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:src="@drawable/ic_check_circle_24"
+                    android:background="@drawable/bg_card_white"
+                    app:backgroundTint="#E8F5E9"
+                    android:contentDescription="Completar"
+                    android:tint="#4CAF50"
+                    android:padding="8dp"
+                    android:layout_marginEnd="8dp"
+                    android:visibility="gone"/>
+
                 <ImageButton
                     android:id="@+id/btnEdit"
                     android:layout_width="36dp"
@@ -114,7 +128,9 @@
                 android:textSize="12sp"
                 android:textStyle="bold"
                 android:textColor="@color/orangeEnd"
-                android:layout_marginStart="12dp"/>
+                android:layout_marginStart="12dp"
+                android:minWidth="40dp"
+                android:gravity="center"/>
         </LinearLayout>
 
     </LinearLayout>

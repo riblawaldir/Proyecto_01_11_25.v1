@@ -33,21 +33,31 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     public interface OnHabitDelete {
         void onHabitDelete(Habit habit);
     }
+    
+    public interface OnHabitQuickComplete {
+        void onHabitQuickComplete(Habit habit);
+    }
 
     private final List<Habit> data;
     private final OnHabitClick listener;
     private final OnHabitEdit editListener;
     private final OnHabitDelete deleteListener;
+    private final OnHabitQuickComplete quickCompleteListener;
 
     public HabitAdapter(List<Habit> data, OnHabitClick listener) {
-        this(data, listener, null, null);
+        this(data, listener, null, null, null);
     }
     
     public HabitAdapter(List<Habit> data, OnHabitClick listener, OnHabitEdit editListener, OnHabitDelete deleteListener) {
+        this(data, listener, editListener, deleteListener, null);
+    }
+    
+    public HabitAdapter(List<Habit> data, OnHabitClick listener, OnHabitEdit editListener, OnHabitDelete deleteListener, OnHabitQuickComplete quickCompleteListener) {
         this.data = data;
         this.listener = listener;
         this.editListener = editListener;
         this.deleteListener = deleteListener;
+        this.quickCompleteListener = quickCompleteListener;
     }
 
     @NonNull @Override
@@ -88,18 +98,62 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
             if (glassesDrunk >= glassesGoal && !isCompleted) {
                 isCompleted = true;
             }
+        } else if (item.getType() == Habit.HabitType.WALK) {
+            // Mostrar progreso de caminar (metros o pasos)
+            if (item.getWalkGoalSteps() != null && item.getWalkGoalSteps() > 0) {
+                int stepsGoal = item.getWalkGoalSteps();
+                int stepsWalked = getTodayProgress(h.itemView.getContext(), "walk_steps_" + item.getId(), 0);
+                progressValue = stepsGoal > 0 ? (stepsWalked * 100 / stepsGoal) : 0;
+                if (progressValue > 100) progressValue = 100;
+                goalText = goalText + " (" + stepsWalked + "/" + stepsGoal + " pasos)";
+                if (stepsWalked >= stepsGoal && !isCompleted) {
+                    isCompleted = true;
+                }
+            } else if (item.getWalkGoalMeters() != null && item.getWalkGoalMeters() > 0) {
+                int metersGoal = item.getWalkGoalMeters();
+                int metersWalked = getTodayProgress(h.itemView.getContext(), "walk_meters_" + item.getId(), 0);
+                progressValue = metersGoal > 0 ? (metersWalked * 100 / metersGoal) : 0;
+                if (progressValue > 100) progressValue = 100;
+                goalText = goalText + " (" + metersWalked + "/" + metersGoal + " m)";
+                if (metersWalked >= metersGoal && !isCompleted) {
+                    isCompleted = true;
+                }
+            } else {
+                // Sin meta configurada, usar valor por defecto
+                int defaultMeters = 500;
+                int metersWalked = getTodayProgress(h.itemView.getContext(), "walk_meters_" + item.getId(), 0);
+                progressValue = defaultMeters > 0 ? (metersWalked * 100 / defaultMeters) : 0;
+                if (progressValue > 100) progressValue = 100;
+                goalText = goalText + " (" + metersWalked + "/" + defaultMeters + " m)";
+                if (metersWalked >= defaultMeters && !isCompleted) {
+                    isCompleted = true;
+                }
+            }
         } else if (item.getTargetValue() > 0 && item.getTargetUnit() != null) {
             goalText = goalText + " (" + item.getTargetValue() + " " + item.getTargetUnit() + ")";
-            progressValue = isCompleted ? 100 : 25;
+            progressValue = isCompleted ? 100 : 0; // Mostrar 0% si no está completado (más claro)
         } else {
-            progressValue = isCompleted ? 100 : 25;
+            // Para hábitos sin progreso parcial, mostrar 0% si no está completado
+            progressValue = isCompleted ? 100 : 0;
         }
         
         h.txtGoal.setText(goalText);
-        h.txtType.setText(item.getCategory());
         
         // Configurar progreso y color según estado
         h.progress.setProgress(progressValue);
+        
+        // Mostrar información: categoría, puntos y progreso
+        String typeText = item.getCategory();
+        if (item.getPoints() > 0) {
+            typeText = typeText + " • " + item.getPoints() + " pts";
+        }
+        // Agregar porcentaje de progreso
+        String progressText = progressValue + "%";
+        if (isCompleted) {
+            progressText = "✓ " + progressText;
+        }
+        typeText = typeText + " • " + progressText;
+        h.txtType.setText(typeText);
         
         // Cambiar color de la barra: verde si está completado, naranja si no
         if (isCompleted || progressValue >= 100) {
@@ -110,6 +164,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
                     R.drawable.progress_circle_drawable_green
                 )
             );
+            h.txtType.setTextColor(ContextCompat.getColor(h.itemView.getContext(), android.R.color.holo_green_dark));
         } else {
             // Barra naranja para tareas pendientes
             h.progress.setProgressDrawable(
@@ -118,6 +173,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
                     R.drawable.progress_circle_drawable
                 )
             );
+            h.txtType.setTextColor(ContextCompat.getColor(h.itemView.getContext(), R.color.orangeEnd));
         }
 
         h.itemView.setOnClickListener(v -> {
@@ -140,6 +196,42 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
                     deleteListener.onHabitDelete(item);
                 }
             });
+        }
+        
+        // Botón de completado rápido (solo visible si no está completado y es un tipo que permite completado rápido)
+        if (h.btnQuickComplete != null) {
+            boolean canQuickComplete = !isCompleted && canQuickCompleteHabit(item);
+            h.btnQuickComplete.setVisibility(canQuickComplete ? View.VISIBLE : View.GONE);
+            
+            if (canQuickComplete) {
+                h.btnQuickComplete.setOnClickListener(v -> {
+                    if (quickCompleteListener != null) {
+                        quickCompleteListener.onHabitQuickComplete(item);
+                    }
+                });
+            }
+        }
+    }
+    
+    /**
+     * Determina si un hábito puede completarse rápidamente desde el Dashboard
+     */
+    private boolean canQuickCompleteHabit(Habit habit) {
+        switch (habit.getType()) {
+            case DEMO:
+            case VITAMINS:
+            case COLD_SHOWER:
+            case ENGLISH:
+            case CODING:
+                return true; // Estos tipos se pueden completar con un click
+            case READ_BOOK:
+            case WATER:
+            case JOURNALING:
+            case MEDITATE:
+            case GYM:
+                return false; // Estos requieren abrir una actividad específica
+            default:
+                return false;
         }
     }
 
@@ -199,7 +291,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
     static class VH extends RecyclerView.ViewHolder {
         TextView txtName, txtGoal, txtType;
         ProgressBar progress;
-        android.widget.ImageButton btnEdit, btnDelete;
+        android.widget.ImageButton btnEdit, btnDelete, btnQuickComplete;
         VH(@NonNull View v) {
             super(v);
             txtName  = v.findViewById(R.id.txtHabitName);
@@ -208,6 +300,7 @@ public class HabitAdapter extends RecyclerView.Adapter<HabitAdapter.VH> {
             progress = v.findViewById(R.id.progressHabit);
             btnEdit = v.findViewById(R.id.btnEdit);
             btnDelete = v.findViewById(R.id.btnDelete);
+            btnQuickComplete = v.findViewById(R.id.btnQuickComplete);
         }
     }
 }

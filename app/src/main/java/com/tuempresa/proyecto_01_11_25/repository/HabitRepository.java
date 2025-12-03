@@ -168,6 +168,8 @@ public class  HabitRepository {
                     habit.getJournalEnabled(),
                     habit.getGymDays(),
                     habit.getWaterGoalGlasses(),
+                    habit.getWalkGoalMeters(),
+                    habit.getWalkGoalSteps(),
                     habit.getOneClickComplete(),
                     habit.getEnglishMode(),
                     habit.getCodingMode(),
@@ -221,6 +223,8 @@ public class  HabitRepository {
                     habit.getJournalEnabled(),
                     habit.getGymDays(),
                     habit.getWaterGoalGlasses(),
+                    habit.getWalkGoalMeters(),
+                    habit.getWalkGoalSteps(),
                     habit.getOneClickComplete(),
                     habit.getEnglishMode(),
                     habit.getCodingMode(),
@@ -257,41 +261,62 @@ public class  HabitRepository {
         executorService.execute(() -> {
             try {
                 Habit habit = dbHelper.getHabitById(id);
-                if (habit != null) {
-                    // Eliminar de base de datos local
-                    dbHelper.deleteHabit(id);
-                    
-                    // Obtener serverId si existe
-                    Long serverId = dbHelper.getServerId(id);
-                    
-                    if (connectionMonitor.isConnected() && serverId != null && serverId > 0) {
-                        // Eliminar del servidor
-                        apiHelper.deleteHabit(serverId, new HabitApiHelper.OnHabitDeletedListener() {
-                            @Override
-                            public void onSuccess() {
+                if (habit == null) {
+                    callback.onError("Hábito no encontrado");
+                    return;
+                }
+                
+                // Obtener serverId ANTES de eliminar localmente
+                Long serverId = dbHelper.getServerId(id);
+                Log.d(TAG, "Eliminando hábito - localId: " + id + ", serverId: " + serverId);
+                
+                // Si tiene serverId y hay conexión, eliminar del servidor PRIMERO
+                if (connectionMonitor.isConnected() && serverId != null && serverId > 0) {
+                    Log.d(TAG, "Eliminando hábito del servidor primero (serverId: " + serverId + ")");
+                    apiHelper.deleteHabit(serverId, new HabitApiHelper.OnHabitDeletedListener() {
+                        @Override
+                        public void onSuccess() {
+                            Log.d(TAG, "✅ Hábito eliminado del servidor. Eliminando localmente...");
+                            // Eliminar de base de datos local DESPUÉS de eliminar del servidor
+                            boolean deleted = dbHelper.deleteHabit(id);
+                            if (deleted) {
+                                Log.d(TAG, "✅ Hábito eliminado localmente");
                                 callback.onSuccess(null);
+                            } else {
+                                Log.e(TAG, "⚠️ Error al eliminar hábito localmente después de eliminarlo del servidor");
+                                callback.onError("Error al eliminar hábito localmente");
                             }
+                        }
 
-                            @Override
-                            public void onError(String error) {
-                                Log.e(TAG, "Error al eliminar hábito del servidor: " + error);
-                                // Guardar como operación pendiente
-                                String habitJson = gson.toJson(habit);
-                                dbHelper.savePendingOperation("DELETE", "HABIT", id, habitJson);
-                                callback.onSuccess(null);
-                            }
-                        });
-                    } else {
-                        // Guardar como operación pendiente
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "❌ Error al eliminar hábito del servidor: " + error);
+                            // Si falla la eliminación en el servidor, guardar como operación pendiente
+                            // pero NO eliminar localmente todavía (para poder reintentar)
+                            String habitJson = gson.toJson(habit);
+                            dbHelper.savePendingOperation("DELETE", "HABIT", id, habitJson);
+                            // Eliminar localmente de todas formas (el usuario ya lo pidió)
+                            dbHelper.deleteHabit(id);
+                            callback.onSuccess(null);
+                        }
+                    });
+                } else {
+                    // No hay conexión o no tiene serverId, eliminar localmente y guardar como pendiente
+                    Log.d(TAG, "Eliminando hábito localmente (sin serverId o sin conexión)");
+                    boolean deleted = dbHelper.deleteHabit(id);
+                    if (deleted) {
+                        // Guardar como operación pendiente para sincronizar después
                         String habitJson = gson.toJson(habit);
                         dbHelper.savePendingOperation("DELETE", "HABIT", id, habitJson);
+                        Log.d(TAG, "✅ Hábito eliminado localmente y guardado como operación pendiente");
                         callback.onSuccess(null);
+                    } else {
+                        Log.e(TAG, "❌ Error al eliminar hábito localmente");
+                        callback.onError("Error al eliminar hábito");
                     }
-                } else {
-                    callback.onError("Hábito no encontrado");
                 }
             } catch (Exception e) {
-                Log.e(TAG, "Error al eliminar hábito", e);
+                Log.e(TAG, "❌ Excepción al eliminar hábito", e);
                 callback.onError(e.getMessage());
             }
         });

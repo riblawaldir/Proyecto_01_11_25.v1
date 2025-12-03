@@ -467,6 +467,8 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         if (habit.getJournalEnabled() != null) values.put(COLUMN_HABIT_JOURNAL_ENABLED, habit.getJournalEnabled() ? 1 : 0);
         if (habit.getGymDays() != null) values.put(COLUMN_HABIT_GYM_DAYS, habit.getGymDays());
         if (habit.getWaterGoalGlasses() != null) values.put(COLUMN_HABIT_WATER_GOAL_GLASSES, habit.getWaterGoalGlasses());
+        if (habit.getWalkGoalMeters() != null) values.put(COLUMN_HABIT_WALK_GOAL_METERS, habit.getWalkGoalMeters());
+        if (habit.getWalkGoalSteps() != null) values.put(COLUMN_HABIT_WALK_GOAL_STEPS, habit.getWalkGoalSteps());
         if (habit.getOneClickComplete() != null) values.put(COLUMN_HABIT_ONE_CLICK_COMPLETE, habit.getOneClickComplete() ? 1 : 0);
         if (habit.getEnglishMode() != null) values.put(COLUMN_HABIT_ENGLISH_MODE, habit.getEnglishMode() ? 1 : 0);
         if (habit.getCodingMode() != null) values.put(COLUMN_HABIT_CODING_MODE, habit.getCodingMode() ? 1 : 0);
@@ -503,6 +505,8 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
                 habit.getJournalEnabled(),
                 habit.getGymDays(),
                 habit.getWaterGoalGlasses(),
+                habit.getWalkGoalMeters(),
+                habit.getWalkGoalSteps(),
                 habit.getOneClickComplete(),
                 habit.getEnglishMode(),
                 habit.getCodingMode(),
@@ -727,6 +731,16 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
             int waterGoalGlassesIndex = cursor.getColumnIndex(COLUMN_HABIT_WATER_GOAL_GLASSES);
             if (waterGoalGlassesIndex >= 0 && !cursor.isNull(waterGoalGlassesIndex)) {
                 habit.setWaterGoalGlasses(cursor.getInt(waterGoalGlassesIndex));
+            }
+            
+            int walkGoalMetersIndex = cursor.getColumnIndex(COLUMN_HABIT_WALK_GOAL_METERS);
+            if (walkGoalMetersIndex >= 0 && !cursor.isNull(walkGoalMetersIndex)) {
+                habit.setWalkGoalMeters(cursor.getInt(walkGoalMetersIndex));
+            }
+            
+            int walkGoalStepsIndex = cursor.getColumnIndex(COLUMN_HABIT_WALK_GOAL_STEPS);
+            if (walkGoalStepsIndex >= 0 && !cursor.isNull(walkGoalStepsIndex)) {
+                habit.setWalkGoalSteps(cursor.getInt(walkGoalStepsIndex));
             }
             
             int oneClickCompleteIndex = cursor.getColumnIndex(COLUMN_HABIT_ONE_CLICK_COMPLETE);

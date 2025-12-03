@@ -99,30 +99,90 @@ public class ScoresActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         loadScores();
+        loadStreak(); // Refrescar racha al volver a la actividad
         loadFriends();
+    }
+    
+    /**
+     * Carga y muestra la información de la racha actual
+     * Nota: getCurrentStreak() ya maneja la activación forzada si es necesario
+     */
+    private void loadStreak() {
+        long userId = sessionManager.getUserId();
+        
+        // CRÍTICO: Recalcular el contador basándose en los hábitos actualmente completados
+        // Esto corrige casos donde los hábitos se completaron antes de que se implementara el sistema de rachas
+        // o cuando hay inconsistencias en el contador
+        dbHelper.recalculateDailyHabitsCompleted(userId);
+        
+        // Obtener valores directamente después de recalcular (sin llamar a checkAndResetDailyCounter de nuevo)
+        int dailyHabitsCompleted = dbHelper.getDailyHabitsCompleted(userId);
+        int currentStreak = dbHelper.getCurrentStreak();
+        
+        android.util.Log.d("ScoresActivity", "📊 loadStreak() - Racha actual: " + currentStreak + ", Hábitos completados hoy: " + dailyHabitsCompleted + ", userId: " + userId);
+        
+        // Si después de recalcular tenemos 3+ hábitos pero la racha sigue en 0, forzar activación
+        if (dailyHabitsCompleted >= 3 && currentStreak == 0) {
+            android.util.Log.w("ScoresActivity", "⚠️ Después de recalcular: " + dailyHabitsCompleted + " hábitos completados pero racha es 0. Forzando activación...");
+            // Forzar activación directamente usando el método del dbHelper
+            // Esto asegura que usamos las constantes correctas
+            android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+            android.content.ContentValues values = new android.content.ContentValues();
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+            cal.set(java.util.Calendar.MINUTE, 0);
+            cal.set(java.util.Calendar.SECOND, 0);
+            cal.set(java.util.Calendar.MILLISECOND, 0);
+            long todayTimestamp = cal.getTimeInMillis() / 1000;
+            
+            // Usar las constantes de HabitDatabaseHelper (accesibles porque son protected)
+            values.put("current_streak", 1);
+            values.put("last_streak_date", todayTimestamp);
+            // IMPORTANTE: usar "user_id" no "id"
+            int rowsUpdated = db.update("users", values, "user_id=?", new String[]{String.valueOf(userId)});
+            db.close();
+            
+            android.util.Log.d("ScoresActivity", "🔧 Forzando activación: rowsUpdated=" + rowsUpdated + " para userId=" + userId);
+            
+            if (rowsUpdated > 0) {
+                android.util.Log.d("ScoresActivity", "✅ Racha forzada a 1 día desde ScoresActivity");
+                currentStreak = 1;
+                // Recargar el valor desde la base de datos
+                currentStreak = dbHelper.getCurrentStreak();
+            } else {
+                android.util.Log.e("ScoresActivity", "❌ No se pudo actualizar la racha. Verificar que el usuario " + userId + " existe en la tabla users.");
+            }
+        }
+        
+        // Mostrar información de la racha
+        if (currentStreak > 0) {
+            txtCurrentStreak.setText(currentStreak + " día" + (currentStreak > 1 ? "s" : ""));
+            if (dailyHabitsCompleted >= 3) {
+                txtStreakInfo.setText("¡Excelente! Completaste " + dailyHabitsCompleted + " hábitos hoy. Tu racha continúa.");
+            } else {
+                int remaining = 3 - dailyHabitsCompleted;
+                txtStreakInfo.setText("Completa " + remaining + " hábito" + (remaining > 1 ? "s más" : " más") + " hoy para mantener tu racha.");
+            }
+        } else {
+            txtCurrentStreak.setText("Sin racha");
+            if (dailyHabitsCompleted >= 3) {
+                // Si completó 3 hábitos pero la racha es 0, getCurrentStreak() debería haberla activado
+                // Pero por si acaso, mostramos el mensaje correcto
+                android.util.Log.w("ScoresActivity", "⚠️ Usuario completó " + dailyHabitsCompleted + " hábitos pero la racha es 0. Esto no debería pasar si getCurrentStreak() funcionó correctamente.");
+                txtCurrentStreak.setText("1 día");
+                txtStreakInfo.setText("¡Felicidades! Completaste 3 hábitos. Tu racha ha comenzado.");
+            } else {
+                int remaining = 3 - dailyHabitsCompleted;
+                txtStreakInfo.setText("Completa " + remaining + " hábito" + (remaining > 1 ? "s más" : " más") + " para iniciar tu racha.");
+            }
+        }
     }
 
     private void loadScores() {
         int totalScore = dbHelper.getTotalScore();
         txtTotalScore.setText(String.valueOf(totalScore));
 
-        // Cargar racha actual
-        int currentStreak = dbHelper.getCurrentStreak();
-        long userId = sessionManager.getUserId();
-        int dailyHabitsCompleted = dbHelper.getDailyHabitsCompleted(userId);
-        
-        if (currentStreak > 0) {
-            txtCurrentStreak.setText(currentStreak + " día" + (currentStreak > 1 ? "s" : ""));
-            txtStreakInfo.setText("¡Sigue así! Completa 3 hábitos hoy para mantener tu racha.");
-        } else {
-            txtCurrentStreak.setText("Sin racha");
-            if (dailyHabitsCompleted >= 3) {
-                txtStreakInfo.setText("¡Completaste 3 hábitos! Tu racha comenzará mañana.");
-            } else {
-                int remaining = 3 - dailyHabitsCompleted;
-                txtStreakInfo.setText("Completa " + remaining + " hábito" + (remaining > 1 ? "s más" : " más") + " para iniciar tu racha.");
-            }
-        }
+        loadStreak();
 
     }
 

@@ -189,21 +189,42 @@ public class HabitApiHelper {
      * @param listener Callback para manejar la respuesta
      */
     public void deleteHabit(long id, OnHabitDeletedListener listener) {
+        Log.d(TAG, "🔄 Intentando eliminar hábito del servidor (id: " + id + ")");
         Call<HabitsResponse> call = apiService.deleteHabit(id);
         call.enqueue(new Callback<HabitsResponse>() {
             @Override
             public void onResponse(Call<HabitsResponse> call, Response<HabitsResponse> response) {
                 if (response.isSuccessful()) {
-                    listener.onSuccess();
+                    HabitsResponse habitsResponse = response.body();
+                    if (habitsResponse != null && habitsResponse.isSuccess()) {
+                        Log.d(TAG, "✅ Hábito eliminado exitosamente del servidor (id: " + id + ")");
+                        listener.onSuccess();
+                    } else {
+                        String errorMsg = "Error en respuesta del servidor";
+                        if (habitsResponse != null && habitsResponse.getMessage() != null) {
+                            errorMsg = habitsResponse.getMessage();
+                        }
+                        Log.e(TAG, "❌ Error al eliminar hábito: " + errorMsg);
+                        listener.onError(errorMsg);
+                    }
                 } else {
-                    String error = "Error al eliminar hábito: " + response.code();
+                    String errorBody = "";
+                    try {
+                        if (response.errorBody() != null) {
+                            errorBody = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error al leer errorBody", e);
+                    }
+                    String error = "Error al eliminar hábito: " + response.code() + " - " + errorBody;
+                    Log.e(TAG, "❌ " + error);
                     listener.onError(error);
                 }
             }
 
             @Override
             public void onFailure(Call<HabitsResponse> call, Throwable t) {
-                Log.e(TAG, "Error al eliminar hábito", t);
+                Log.e(TAG, "❌ Error de conexión al eliminar hábito (id: " + id + ")", t);
                 listener.onError("Error de conexión: " + t.getMessage());
             }
         });

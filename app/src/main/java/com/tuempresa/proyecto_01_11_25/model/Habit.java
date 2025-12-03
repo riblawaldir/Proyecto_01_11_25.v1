@@ -45,6 +45,8 @@ public class Habit {
     private Boolean journalEnabled = null;
     private String gymDays = null; // JSON string
     private Integer waterGoalGlasses = null;
+    private Integer walkGoalMeters = null; // Meta de distancia en metros para caminar
+    private Integer walkGoalSteps = null; // Meta de pasos para caminar (alternativa a metros)
     private Boolean oneClickComplete = null;
     private Boolean englishMode = null;
     private Boolean codingMode = null;
@@ -218,6 +220,22 @@ public class Habit {
 
     public void setWaterGoalGlasses(Integer waterGoalGlasses) {
         this.waterGoalGlasses = waterGoalGlasses;
+    }
+
+    public Integer getWalkGoalMeters() {
+        return walkGoalMeters;
+    }
+
+    public void setWalkGoalMeters(Integer walkGoalMeters) {
+        this.walkGoalMeters = walkGoalMeters;
+    }
+
+    public Integer getWalkGoalSteps() {
+        return walkGoalSteps;
+    }
+
+    public void setWalkGoalSteps(Integer walkGoalSteps) {
+        this.walkGoalSteps = walkGoalSteps;
     }
 
     public Boolean getOneClickComplete() {
