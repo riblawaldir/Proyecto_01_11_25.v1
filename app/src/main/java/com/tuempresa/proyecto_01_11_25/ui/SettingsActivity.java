@@ -463,10 +463,29 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle("Cerrar Sesión")
                 .setMessage("¿Estás seguro de que deseas cerrar sesión?")
                 .setPositiveButton("Sí", (dialog, which) -> {
-                    // Cerrar sesión
+                    // CRÍTICO: Limpiar hábitos antes de cerrar sesión
+                    // Esto asegura que no queden datos del usuario anterior en la BD local
+                    com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                        new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(this);
+                    // Obtener userId antes de cerrar sesión
                     com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
-                            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+                        new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+                    long userId = sessionManager.getUserId();
+                    
+                    // Cerrar sesión
                     sessionManager.logout();
+                    
+                    // Limpiar todos los hábitos de la BD local (ya no hay usuario logueado)
+                    // Esto se hace después del logout para que deleteHabitsNotBelongingToCurrentUser funcione
+                    // Pero como ya cerramos sesión, eliminamos todos los hábitos
+                    try {
+                        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+                        db.delete("habits", null, null);
+                        db.close();
+                        android.util.Log.d("SettingsActivity", "✅ Todos los hábitos eliminados de la BD local después del logout");
+                    } catch (Exception e) {
+                        android.util.Log.e("SettingsActivity", "Error al limpiar hábitos en logout", e);
+                    }
                     
                     // Redirigir a LoginActivity
                     android.content.Intent intent = new android.content.Intent(this, LoginActivity.class);

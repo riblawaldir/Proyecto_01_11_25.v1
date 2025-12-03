@@ -237,7 +237,7 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
     }
 
     /**
-     * Obtiene hábitos no sincronizados
+     * Obtiene hábitos no sincronizados del usuario actual
      */
     public List<Habit> getUnsyncedHabits() {
         List<Habit> habits = new ArrayList<>();
@@ -246,8 +246,16 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         // Asegurar que las columnas de sincronización existan
         ensureSyncColumns(db);
         
+        // CRÍTICO: Filtrar por userId del usuario actual
+        long currentUserId = getCurrentUserId();
+        if (currentUserId <= 0) {
+            Log.w(TAG, "⚠️ No se pueden obtener hábitos: userId inválido (" + currentUserId + ")");
+            return habits;
+        }
+        
         Cursor cursor = db.query(TABLE_HABITS, null, 
-                COLUMN_HABIT_SYNCED + "=0", null, null, null, COLUMN_HABIT_CREATED_AT + " DESC");
+                COLUMN_HABIT_SYNCED + "=0 AND " + COLUMN_HABIT_USER_ID + "=?",
+                new String[]{String.valueOf(currentUserId)}, null, null, COLUMN_HABIT_CREATED_AT + " DESC");
 
         if (cursor.moveToFirst()) {
             do {
@@ -261,7 +269,7 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
     }
 
     /**
-     * Obtiene hábitos sincronizados (que tienen serverId)
+     * Obtiene hábitos sincronizados (que tienen serverId) del usuario actual
      */
     public List<Habit> getSyncedHabits() {
         List<Habit> habits = new ArrayList<>();
@@ -270,10 +278,17 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
         // Asegurar que las columnas de sincronización existan
         ensureSyncColumns(db);
         
-        // Obtener hábitos que tienen serverId (están sincronizados)
+        // CRÍTICO: Filtrar por userId del usuario actual
+        long currentUserId = getCurrentUserId();
+        if (currentUserId <= 0) {
+            Log.w(TAG, "⚠️ No se pueden obtener hábitos sincronizados: userId inválido (" + currentUserId + ")");
+            return habits;
+        }
+        
+        // Obtener hábitos que tienen serverId (están sincronizados) Y pertenecen al usuario actual
         Cursor cursor = db.query(TABLE_HABITS, null, 
-                COLUMN_HABIT_SYNCED + "=1 AND " + COLUMN_HABIT_SERVER_ID + " IS NOT NULL", 
-                null, null, null, COLUMN_HABIT_CREATED_AT + " DESC");
+                COLUMN_HABIT_SYNCED + "=1 AND " + COLUMN_HABIT_SERVER_ID + " IS NOT NULL AND " + COLUMN_HABIT_USER_ID + "=?", 
+                new String[]{String.valueOf(currentUserId)}, null, null, COLUMN_HABIT_CREATED_AT + " DESC");
 
         if (cursor.moveToFirst()) {
             do {
@@ -370,8 +385,12 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
             shouldClose = true;
         }
         ensureSyncColumns(db);
+        
+        // CRÍTICO: Filtrar también por userId para asegurar que solo se obtengan hábitos del usuario actual
+        long currentUserId = getCurrentUserId();
         Cursor cursor = db.query(TABLE_HABITS, null, 
-                COLUMN_HABIT_SERVER_ID + "=?", new String[]{String.valueOf(serverId)}, null, null, null);
+                COLUMN_HABIT_SERVER_ID + "=? AND " + COLUMN_HABIT_USER_ID + "=?",
+                new String[]{String.valueOf(serverId), String.valueOf(currentUserId)}, null, null, null);
 
         Habit habit = null;
         if (cursor.moveToFirst()) {
@@ -641,6 +660,16 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
 
     private void loadHabitExtraFields(Cursor cursor, Habit habit) {
         try {
+            // CRÍTICO: Cargar userId desde la BD
+            int userIdIndex = cursor.getColumnIndex(COLUMN_HABIT_USER_ID);
+            if (userIdIndex >= 0 && !cursor.isNull(userIdIndex)) {
+                long userId = cursor.getLong(userIdIndex);
+                habit.setUserId(userId);
+                Log.d(TAG, "✅ userId cargado desde BD: " + userId + " para hábito: " + habit.getTitle());
+            } else {
+                Log.w(TAG, "⚠️ No se encontró columna user_id en cursor para hábito: " + habit.getTitle());
+            }
+            
             // Cargar points
             int pointsIndex = cursor.getColumnIndex(COLUMN_HABIT_POINTS);
             if (pointsIndex >= 0 && !cursor.isNull(pointsIndex)) {

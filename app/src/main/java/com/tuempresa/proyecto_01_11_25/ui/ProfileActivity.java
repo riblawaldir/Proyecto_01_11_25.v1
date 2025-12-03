@@ -88,7 +88,23 @@ public class ProfileActivity extends AppCompatActivity {
                 .setTitle("Cerrar Sesión")
                 .setMessage("¿Estás seguro de que deseas cerrar sesión?")
                 .setPositiveButton("Sí", (dialog, which) -> {
+                    // CRÍTICO: Limpiar hábitos antes de cerrar sesión
+                    com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                        new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(this);
+                    long userId = session.getUserId();
+                    
                     session.logoutUser();
+                    
+                    // Limpiar todos los hábitos de la BD local después del logout
+                    try {
+                        android.database.sqlite.SQLiteDatabase db = dbHelper.getWritableDatabase();
+                        db.delete("habits", null, null);
+                        db.close();
+                        android.util.Log.d("ProfileActivity", "✅ Todos los hábitos eliminados de la BD local después del logout");
+                    } catch (Exception e) {
+                        android.util.Log.e("ProfileActivity", "Error al limpiar hábitos en logout", e);
+                    }
+                    
                     // Redirigir al Login y limpiar pila
                     Intent i = new Intent(this, LoginActivity.class);
                     i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);

@@ -1,200 +1,442 @@
-# 🔍 REVISIÓN COMPLETA DEL PROYECTO HABITUS+
+# 📋 REVISIÓN COMPLETA DEL PROYECTO HABITUS+
 
-## 📋 RESUMEN EJECUTIVO
-
-Esta revisión identifica **errores críticos**, problemas de diseño y áreas de mejora en el proyecto Habitus+ (Android + API .NET).
-
----
-
-## 🚨 ERRORES CRÍTICOS
-
-### 1. **CRASH: Base de Datos Cerrada Prematuramente** ✅ CORREGIDO
-- **Ubicación**: `HabitDatabaseHelperSync.getSyncedHabits()`
-- **Problema**: Se cerraba la base de datos con `db.close()` antes de que otros hilos terminaran de usarla
-- **Error**: `IllegalStateException: attempt to re-open an already-closed object`
-- **Solución**: Eliminado `db.close()` - `HabitDatabaseHelper` maneja la conexión automáticamente
-
-### 2. **userId No Se Guarda Correctamente** ⚠️ PARCIALMENTE CORREGIDO
-- **Ubicación**: `HabitRepository.syncHabitToServer()` y `SyncManager.processOperation()`
-- **Problema**: El `userId` no se establecía antes de enviar al servidor
-- **Solución**: Agregado `habit.setUserId(sessionManager.getUserId())` antes de crear/actualizar
-- **Estado**: ✅ Cliente corregido, pero el API devuelve `userId: 0` en algunos casos
-
-### 3. **Error de Compilación: sessionManager No Encontrado** ✅ CORREGIDO
-- **Ubicación**: `SyncManager.processOperation()`
-- **Problema**: Intentaba acceder a `dbHelper.sessionManager` que no existe
-- **Solución**: Agregado `SessionManager` como campo privado en `SyncManager`
-
-### 4. **API Ignora userId del Request Body** ⚠️ DISEÑO (No es error)
-- **Ubicación**: `HabitController.CreateHabit()`
-- **Problema**: El API siempre usa el `userId` del JWT token, ignorando el del request body
-- **Análisis**: Esto es **correcto desde el punto de vista de seguridad**, pero causa confusión
-- **Impacto**: El cliente envía `userId: -1` o `userId: 0` y el API lo ignora (correcto)
-- **Recomendación**: El cliente NO debería enviar `userId` en el request body, solo el API debe establecerlo desde el token
+**Fecha de Revisión**: 2025-12-03  
+**Proyectos Revisados**: Aplicación Móvil Android + API REST .NET
 
 ---
 
-## ⚠️ PROBLEMAS DE DISEÑO
+## 📱 PROYECTO MÓVIL (ANDROID)
 
-### 5. **Múltiples Sincronizaciones Simultáneas**
-- **Ubicación**: `DashboardActivity.refreshHabitsList()` y `HabitRepository.forceSync()`
-- **Problema**: Se pueden iniciar múltiples sincronizaciones al mismo tiempo
-- **Impacto**: Condiciones de carrera, duplicación de requests, posibles crashes
-- **Solución Parcial**: `SyncManager` tiene `isSyncing` pero no previene todas las llamadas
+### 🏗️ Arquitectura General
 
-### 6. **Manejo de Base de Datos Inconsistente**
-- **Problema**: Algunos métodos cierran `db` manualmente, otros no
-- **Ubicación**: Múltiples métodos en `HabitDatabaseHelper` y `HabitDatabaseHelperSync`
-- **Riesgo**: Memory leaks o crashes por conexiones no cerradas
-- **Recomendación**: Estandarizar el manejo de conexiones (usar try-with-resources o dejar que `SQLiteOpenHelper` maneje)
+**Tecnologías Principales:**
+- **Lenguaje**: Java 11
+- **SDK Mínimo**: Android 26 (Android 8.0)
+- **SDK Objetivo**: Android 36
+- **Arquitectura**: MVP/MVC con componentes nativos
 
-### 7. **Falta de Validación de userId en Cliente**
-- **Problema**: El cliente no valida que `userId > 0` antes de operaciones críticas
-- **Impacto**: Se pueden crear hábitos con `userId: -1` o `userId: 0`
-- **Solución**: Agregar validación en `HabitRepository.createHabit()` y `syncHabitToServer()`
+**Dependencias Clave:**
+- Retrofit 2.9.0 (API REST)
+- Gson 2.10.1 (Serialización JSON)
+- CameraX 1.3.4 (Cámara)
+- ML Kit Text Recognition 16.0.1 (Reconocimiento de texto)
+- Google Maps & Location Services
+- WorkManager 2.9.0 (Sincronización en segundo plano)
 
-### 8. **Sincronización No Atómica**
-- **Problema**: La sincronización no es transaccional
-- **Impacto**: Si falla a mitad de camino, puede dejar datos inconsistentes
-- **Recomendación**: Implementar transacciones o rollback en caso de error
+### 📂 Estructura del Proyecto
 
----
+```
+app/src/main/java/com/tuempresa/proyecto_01_11_25/
+├── api/                    # Clientes y servicios API
+│   ├── AuthApiService.java
+│   ├── HabitApiService.java
+│   ├── HabitApiHelper.java
+│   ├── AuthInterceptor.java
+│   └── HabitApiClient.java
+├── database/               # Base de datos SQLite
+│   ├── HabitDatabaseHelper.java
+│   ├── HabitDatabaseHelperSync.java
+│   └── CleanupHelper.java
+├── model/                  # Modelos de datos
+│   ├── Habit.java
+│   ├── User.java
+│   ├── Score.java
+│   └── HabitsResponse.java
+├── ui/                     # Actividades (Activities)
+│   ├── SplashActivity.java
+│   ├── LoginActivity.java
+│   ├── RegisterActivity.java
+│   ├── DashboardActivity.java
+│   ├── HabitDetailActivity.java
+│   ├── ConfigureHabitActivity.java
+│   └── [más actividades...]
+├── sync/                   # Sincronización
+│   ├── SyncManager.java
+│   └── SyncWorker.java
+├── sensors/                # Sensores del dispositivo
+│   ├── StepSensorManager.java
+│   ├── AccelerometerSensorManager.java
+│   └── LightSensorManager.java
+└── utils/                  # Utilidades
+    ├── SessionManager.java
+    ├── ReminderNotificationManager.java
+    └── BackupManager.java
+```
 
-## 🐛 BUGS MENORES
+### ✅ Puntos Fuertes
 
-### 9. **Hábitos con userId: 0 en Base de Datos**
-- **Problema**: Existen hábitos con `userId: 0` en la base de datos
-- **Causa**: Hábitos creados antes de implementar la validación de `userId`
-- **Solución**: Script de limpieza o migración para eliminar/actualizar hábitos huérfanos
+1. **Sincronización Offline-First**
+   - Base de datos SQLite local
+   - Cola de operaciones pendientes
+   - Sincronización automática con WorkManager
+   - Prevención de sincronizaciones múltiples (ReentrantLock)
 
-### 10. **Logs Excesivos**
-- **Problema**: Demasiados logs de depuración en producción
-- **Impacto**: Performance y tamaño de logs
-- **Recomendación**: Usar niveles de log apropiados (DEBUG, INFO, WARN, ERROR)
+2. **Autenticación JWT**
+   - Interceptor automático para agregar token
+   - SessionManager para gestión de sesión
+   - Manejo de tokens expirados
 
-### 11. **Falta de Manejo de Errores en Algunos Callbacks**
-- **Problema**: Algunos callbacks no manejan todos los casos de error
-- **Ejemplo**: `HabitApiHelper.OnHabitSavedListener` no siempre maneja errores de red
-- **Recomendación**: Implementar manejo de errores consistente
+3. **Tipos de Hábitos Diversos**
+   - EXERCISE (acelerómetro)
+   - WALK (GPS/distancia)
+   - READ (cámara + ML Kit)
+   - READ_BOOK, VITAMINS, MEDITATE, JOURNALING, GYM, WATER, etc.
 
----
+4. **Sensores Integrados**
+   - Acelerómetro para ejercicio
+   - GPS para caminatas
+   - Cámara + ML Kit para lectura
+   - Sensores de luz y giroscopio
 
-## 🔧 PROBLEMAS DE API
+5. **Correcciones Críticas Aplicadas**
+   - ✅ Validación de userId en sincronización
+   - ✅ Prevención de sincronizaciones múltiples
+   - ✅ Limpieza automática de hábitos corruptos
 
-### 12. **API Devuelve userId: 0 en Respuestas**
-- **Ubicación**: `HabitController.MapToDto()`
-- **Problema**: Aunque el API guarda el `userId` correcto, a veces devuelve `userId: 0`
-- **Causa Posible**: Hábitos creados antes de la corrección o problemas de mapeo
-- **Verificación**: Revisar que `MapToDto()` siempre incluya `UserId = habit.UserId`
+### ⚠️ Áreas de Mejora
 
-### 13. **Falta de Validación de Token JWT**
-- **Problema**: No se valida que el token JWT sea válido antes de procesar requests
-- **Impacto**: Posibles problemas de seguridad
-- **Estado**: El middleware `[Authorize]` debería manejar esto, pero verificar
+1. **Manejo de Errores**
+   - Algunos métodos no manejan todos los casos de error
+   - Falta feedback visual consistente para errores de red
 
-### 14. **GetUserId() Puede Retornar 0**
-- **Ubicación**: `HabitController.GetUserId()`
-- **Problema**: Si el claim no existe, retorna `0` (línea 414: `?? "0"`)
-- **Impacto**: Puede crear hábitos con `userId: 0` si el token está mal formado
-- **Recomendación**: Lanzar excepción si `userId` es `0` o no existe
+2. **Validación de Datos**
+   - Validación básica en algunos formularios
+   - Falta validación de formato de email en registro
 
----
+3. **Testing**
+   - No se observan tests unitarios
+   - Falta testing de integración
 
-## 📱 PROBLEMAS DE ANDROID
+4. **Documentación**
+   - Algunos métodos no tienen JavaDoc completo
+   - Falta documentación de flujos de usuario
 
-### 15. **Memory Leaks Potenciales**
-- **Problema**: `ConnectionMonitor`, `SyncManager`, y otros singletons pueden mantener referencias a `Context`
-- **Impacto**: Memory leaks, especialmente en Activities
-- **Recomendación**: Usar `ApplicationContext` en lugar de `Activity Context`
-
-### 16. **Falta de Manejo de Cambios de Configuración**
-- **Problema**: No se maneja `onConfigurationChanged()` en algunas Activities
-- **Impacto**: Pérdida de estado al rotar la pantalla
-- **Recomendación**: Implementar `onSaveInstanceState()` y `onRestoreInstanceState()`
-
-### 17. **Sincronización en Hilo Principal**
-- **Problema**: Algunas operaciones de sincronización pueden ejecutarse en el hilo principal
-- **Impacto**: ANR (Application Not Responding)
-- **Recomendación**: Asegurar que todas las operaciones de red/DB sean asíncronas
-
-### 18. **Falta de Retry Logic**
-- **Problema**: Si falla una sincronización, no hay retry automático
-- **Impacto**: Datos pueden quedar sin sincronizar
-- **Recomendación**: Implementar retry con backoff exponencial
-
----
-
-## 🔐 PROBLEMAS DE SEGURIDAD
-
-### 19. **Token JWT en Logs**
-- **Problema**: Los logs pueden contener tokens JWT
-- **Impacto**: Riesgo de seguridad si los logs se exponen
-- **Recomendación**: No loggear tokens completos, solo los primeros/last caracteres
-
-### 20. **Falta de Validación de Input**
-- **Problema**: No se valida completamente el input del usuario antes de enviar al API
-- **Ejemplo**: Longitud de strings, valores negativos, etc.
-- **Recomendación**: Validar en cliente Y servidor
-
----
-
-## 📊 PROBLEMAS DE PERFORMANCE
-
-### 21. **Múltiples Queries a Base de Datos**
-- **Problema**: Se hacen múltiples queries cuando se podría hacer una sola
-- **Ejemplo**: `getAllHabits()` luego `getSyncedHabits()` luego `deleteHabitsNotBelongingToCurrentUser()`
-- **Recomendación**: Optimizar queries, usar JOINs cuando sea posible
-
-### 22. **Sincronización Completa en Cada Cambio**
-- **Problema**: Cada cambio dispara una sincronización completa
-- **Impacto**: Consumo excesivo de ancho de banda y batería
-- **Recomendación**: Implementar sincronización incremental o batch
+5. **Seguridad**
+   - Token JWT almacenado en SharedPreferences (considerar encriptación)
+   - URLs de API hardcodeadas (considerar configuración)
 
 ---
 
-## ✅ CORRECCIONES REALIZADAS
+## 🌐 PROYECTO API (.NET)
 
-1. ✅ Eliminado `db.close()` en `getSyncedHabits()`
-2. ✅ Agregado `userId` antes de sincronizar en `syncHabitToServer()`
-3. ✅ Agregado `userId` en `processOperation()`
-4. ✅ Agregado `SessionManager` en `SyncManager`
-5. ✅ Agregado try-catch en `downloadFromServer()`
-6. ✅ Agregado validación de usuario en `DashboardActivity.onCreate()`
+### 🏗️ Arquitectura General
+
+**Tecnologías Principales:**
+- **Framework**: .NET 8.0
+- **ORM**: Entity Framework Core
+- **Base de Datos**: SQL Server (Somee.com)
+- **Autenticación**: JWT Bearer
+- **Documentación**: Swagger/OpenAPI
+
+**Estructura del Proyecto:**
+```
+Api_Habitus/
+├── Controllers/            # Controladores REST
+│   ├── AuthController.cs
+│   ├── HabitController.cs
+│   ├── ScoresController.cs
+│   └── [más controladores...]
+├── Modelos/
+│   ├── Data/              # Entidades de base de datos
+│   │   ├── Habit.cs
+│   │   ├── User.cs
+│   │   └── [más entidades...]
+│   └── DTO/               # Data Transfer Objects
+│       ├── HabitDto.cs
+│       ├── UserDto.cs
+│       └── [más DTOs...]
+├── Helpers/
+│   └── JwtHelper.cs       # Helper para JWT
+├── Middleware/
+│   └── ExceptionHandlingMiddleware.cs
+└── Migrations/            # Migraciones de BD
+```
+
+### 📊 Endpoints Principales
+
+**Autenticación:**
+- `POST /api/v1/auth/register` - Registro de usuario
+- `POST /api/v1/auth/login` - Inicio de sesión
+
+**Hábitos:**
+- `GET /api/v1/habits` - Obtener todos los hábitos del usuario
+- `GET /api/v1/habits/{id}` - Obtener hábito por ID
+- `POST /api/v1/habits` - Crear nuevo hábito
+- `PUT /api/v1/habits/{id}` - Actualizar hábito
+- `DELETE /api/v1/habits/{id}` - Eliminar hábito
+- `POST /api/v1/habits/sync` - Sincronización batch
+- `POST /api/v1/habits/fix-userid-zero` - Endpoint de corrección
+
+**Otros:**
+- Scores, Reminders, DiaryEntries, etc.
+
+### ✅ Puntos Fuertes
+
+1. **Seguridad JWT**
+   - Validación estricta de tokens
+   - Helper centralizado (JwtHelper) para extraer userId
+   - Validación de userId antes de crear/actualizar recursos
+
+2. **Validación de Datos**
+   - Data Annotations en DTOs
+   - Validación de ModelState
+   - Mensajes de error descriptivos
+
+3. **Manejo de Errores**
+   - Middleware de excepciones global
+   - Logging detallado
+   - Respuestas de error consistentes
+
+4. **CORS Configurado**
+   - Permite requests desde la app móvil
+   - Configuración flexible
+
+5. **Swagger/OpenAPI**
+   - Documentación automática de API
+   - Interfaz interactiva para testing
+   - Configuración de JWT en Swagger
+
+6. **Correcciones Críticas**
+   - ✅ JwtHelper valida userId y lanza excepción si es inválido
+   - ✅ Todos los controllers usan JwtHelper
+   - ✅ Prevención de creación de hábitos con userId: 0
+
+### ⚠️ Áreas de Mejora
+
+1. **Base de Datos**
+   - Conexión string expuesta en appsettings.json (considerar variables de entorno)
+   - Falta backup automático
+
+2. **Logging**
+   - Logging básico implementado
+   - Considerar niveles más granulares
+   - Considerar almacenamiento de logs
+
+3. **Testing**
+   - No se observan tests unitarios
+   - Falta testing de integración
+   - Falta testing de endpoints
+
+4. **Performance**
+   - No se observa paginación en endpoints de listado
+   - Considerar caché para datos frecuentes
+
+5. **Documentación**
+   - Algunos endpoints no tienen XML comments completos
+   - Falta documentación de flujos de negocio
 
 ---
 
-## 🎯 PRIORIDADES DE CORRECCIÓN
+## 🔄 INTEGRACIÓN MÓVIL-API
 
-### 🔴 ALTA PRIORIDAD (Crítico - Corregir Inmediatamente)
-1. Validar `userId > 0` antes de todas las operaciones
-2. Prevenir múltiples sincronizaciones simultáneas
-3. Corregir `GetUserId()` en API para que no retorne `0`
-4. Limpiar hábitos con `userId: 0` de la base de datos
+### ✅ Funcionalidades Implementadas
 
-### 🟡 MEDIA PRIORIDAD (Importante - Corregir Pronto)
-5. Estandarizar manejo de base de datos
-6. Implementar retry logic para sincronización
-7. Optimizar queries a base de datos
-8. Agregar validación de input completa
+1. **Autenticación**
+   - Login/Registro funcionando
+   - Token JWT almacenado y enviado automáticamente
+   - Interceptor agrega token a todas las requests
 
-### 🟢 BAJA PRIORIDAD (Mejoras - Corregir Cuando Sea Posible)
-9. Reducir logs en producción
-10. Implementar sincronización incremental
-11. Mejorar manejo de cambios de configuración
-12. Optimizar uso de memoria
+2. **Sincronización**
+   - Sincronización bidireccional
+   - Resolución de conflictos (última escritura gana)
+   - Cola de operaciones pendientes offline
+
+3. **Manejo de Errores**
+   - Manejo de errores de red
+   - Reintentos automáticos
+   - Feedback al usuario
+
+### ⚠️ Problemas Identificados y Corregidos
+
+1. **✅ CORREGIDO: Hábitos con userId: 0**
+   - **Problema**: Se creaban hábitos sin userId válido
+   - **Solución**: Validación estricta en API + limpieza automática en móvil
+
+2. **✅ CORREGIDO: Sincronizaciones Múltiples**
+   - **Problema**: Múltiples sincronizaciones simultáneas causaban crashes
+   - **Solución**: ReentrantLock en SyncManager
+
+3. **✅ CORREGIDO: GetUserId() retornaba 0**
+   - **Problema**: API aceptaba tokens inválidos
+   - **Solución**: JwtHelper con validación estricta
 
 ---
 
-## 📝 NOTAS FINALES
+## 📝 MODELO DE DATOS
 
-- El proyecto tiene una base sólida pero necesita correcciones críticas
-- La mayoría de los problemas son de diseño/arquitectura, no bugs críticos
-- El API está bien diseñado pero necesita validaciones adicionales
-- El cliente Android necesita mejor manejo de errores y sincronización
+### Habit (Hábito)
+
+**Campos Principales:**
+- `Id` (long) - ID único
+- `UserId` (long) - ID del usuario propietario (REQUERIDO)
+- `Title` (string) - Título del hábito (REQUERIDO, máx. 200 caracteres)
+- `Goal` (string) - Meta del hábito (opcional, máx. 500 caracteres)
+- `Category` (string) - Categoría (opcional, máx. 100 caracteres)
+- `Type` (string) - Tipo de hábito (REQUERIDO, máx. 50 caracteres)
+- `Completed` (bool) - Estado de completado
+- `Points` (int) - Puntos por completar (default: 10)
+- `TargetValue` (double) - Valor objetivo
+- `TargetUnit` (string) - Unidad del objetivo
+
+**Campos Específicos por Tipo:**
+- `PagesPerDay` (int?) - Para READ_BOOK
+- `ReminderTimes` (string?) - JSON string con horarios
+- `DurationMinutes` (int?) - Para MEDITATE
+- `DndMode` (bool?) - Modo no molestar
+- `MusicId` (int?) - ID de música para meditación
+- `JournalEnabled` (bool?) - Habilitar journaling
+- `GymDays` (string?) - JSON string con días de gym
+- `WaterGoalGlasses` (int?) - Vasos de agua objetivo
+- `OneClickComplete` (bool?) - Completar con un clic
+- `EnglishMode` (bool?) - Modo inglés
+- `CodingMode` (bool?) - Modo coding
+- `HabitIcon` (string?) - Nombre del ícono
+
+**Campos de Auditoría:**
+- `CreatedAt` (DateTime) - Fecha de creación
+- `UpdatedAt` (DateTime) - Fecha de actualización
+- `IsActive` (bool) - Estado activo/inactivo
 
 ---
 
-**Fecha de Revisión**: 2025-12-02
-**Revisado por**: AI Assistant
-**Estado**: ✅ Errores críticos corregidos, pendientes mejoras de diseño
+## 🔐 SEGURIDAD
 
+### Implementado
+
+1. **JWT Authentication**
+   - Tokens con expiración de 30 días
+   - Validación de firma
+   - Claims: NameIdentifier (userId), Email, Name
+
+2. **Autorización**
+   - Endpoints protegidos con `[Authorize]`
+   - Validación de ownership (usuario solo accede a sus recursos)
+
+3. **Validación de Datos**
+   - Data Annotations
+   - Validación de ModelState
+   - Sanitización de inputs
+
+### Recomendaciones
+
+1. **Encriptación de Token en Móvil**
+   - Considerar encriptar token en SharedPreferences
+   - Usar Android Keystore
+
+2. **HTTPS Obligatorio**
+   - Actualmente permite HTTP (usesCleartextTraffic)
+   - Cambiar a HTTPS en producción
+
+3. **Rate Limiting**
+   - Implementar límites de requests por usuario
+   - Prevenir abuso de API
+
+4. **Secrets Management**
+   - Mover connection strings a variables de entorno
+   - Usar Azure Key Vault o similar
+
+---
+
+## 🚀 DESPLIEGUE
+
+### API
+- **Hosting**: Somee.com
+- **Base de Datos**: SQL Server en Somee.com
+- **URL**: habitusplus.somee.com
+- **Swagger**: Habilitado en desarrollo
+
+### Móvil
+- **Plataforma**: Android
+- **Distribución**: APK (no publicado en Play Store aún)
+- **Versión**: 1.0
+
+---
+
+## 📊 MÉTRICAS Y ESTADÍSTICAS
+
+### Código
+- **Archivos Java**: ~55 archivos
+- **Archivos C#**: ~30+ archivos
+- **Controladores API**: 11 controladores
+- **Actividades Android**: 15+ actividades
+
+### Funcionalidades
+- **Tipos de Hábitos**: 12 tipos diferentes
+- **Sensores Integrados**: 4 sensores
+- **Endpoints API**: 20+ endpoints
+- **Operaciones CRUD**: Completas para hábitos
+
+---
+
+## ✅ CHECKLIST DE CALIDAD
+
+### Móvil
+- [x] Autenticación JWT funcionando
+- [x] Sincronización offline-first
+- [x] Manejo de errores de red
+- [x] Sensores integrados
+- [x] UI funcional
+- [ ] Tests unitarios
+- [ ] Tests de integración
+- [ ] Documentación completa
+
+### API
+- [x] Autenticación JWT funcionando
+- [x] Validación de datos
+- [x] Manejo de errores
+- [x] Swagger documentado
+- [x] CORS configurado
+- [ ] Tests unitarios
+- [ ] Tests de integración
+- [ ] Rate limiting
+
+---
+
+## 🎯 RECOMENDACIONES PRIORITARIAS
+
+### Alta Prioridad
+1. **Implementar Tests**
+   - Tests unitarios para lógica crítica
+   - Tests de integración para endpoints
+
+2. **Mejorar Seguridad**
+   - Encriptar token en móvil
+   - Forzar HTTPS
+   - Rate limiting
+
+3. **Optimizar Performance**
+   - Paginación en listados
+   - Caché para datos frecuentes
+
+### Media Prioridad
+1. **Documentación**
+   - Completar JavaDoc/C# XML comments
+   - Documentar flujos de usuario
+
+2. **Manejo de Errores**
+   - Feedback visual consistente
+   - Mensajes de error más descriptivos
+
+3. **UI/UX**
+   - Mejorar feedback visual
+   - Optimizar tiempos de carga
+
+### Baja Prioridad
+1. **Features Adicionales**
+   - Notificaciones push
+   - Analytics
+   - Backup automático en la nube
+
+---
+
+## 📅 HISTORIAL DE CORRECCIONES
+
+### 2025-12-02
+- ✅ Corregido GetUserId() en API
+- ✅ Prevención de sincronizaciones múltiples
+- ✅ Limpieza automática de hábitos corruptos
+
+---
+
+**Revisión realizada por**: AI Assistant  
+**Última actualización**: 2025-12-03

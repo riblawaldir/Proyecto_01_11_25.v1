@@ -199,10 +199,11 @@ public class DashboardActivity extends AppCompatActivity {
                 android.util.Log.w("Dashboard", "⚠️ Eliminados " + cleanedCount + " hábitos con userId: 0 (hábitos huérfanos)");
             }
             
-            // CRÍTICO: NO limpiar hábitos aquí porque puede eliminar hábitos con serverId válido
-            // que tienen userId: 0 (se corregirán después en la sincronización)
-            // La limpieza se hará DESPUÉS de la sincronización en refreshHabitsList()
-            android.util.Log.d("Dashboard", "Cargando hábitos del usuario " + currentUserId + " (limpieza después de sincronización)");
+            // CRÍTICO: Limpiar hábitos de otros usuarios al iniciar Dashboard
+            // Esto asegura que solo se muestren los hábitos del usuario actual
+            // Especialmente importante cuando se cambia de usuario
+            dbHelper.deleteHabitsNotBelongingToCurrentUser();
+            android.util.Log.d("Dashboard", "✅ Hábitos de otros usuarios eliminados. Cargando hábitos del usuario " + currentUserId);
         } else {
             android.util.Log.w("Dashboard", "⚠️ No hay usuario logueado. Redirigiendo a LoginActivity.");
             // Si no hay sesión, redirigir a LoginActivity
@@ -914,10 +915,18 @@ public class DashboardActivity extends AppCompatActivity {
             refreshHabitsList();
         } else if (requestCode == 400 && resultCode == RESULT_OK) {
             // ConfigureHabitActivity (edición)
-            refreshHabitsList();
+            // CRÍTICO: Pequeño delay para asegurar que el hábito se guardó completamente
+            mainHandler.postDelayed(() -> {
+                android.util.Log.d("Dashboard", "Refrescando lista después de editar hábito");
+                refreshHabitsList();
+            }, 500);
         } else if (requestCode == 500 && resultCode == RESULT_OK) {
             // SelectHabitTypeActivity -> ConfigureHabitActivity (creación)
-            refreshHabitsList();
+            // CRÍTICO: Pequeño delay para asegurar que el hábito se guardó completamente
+            mainHandler.postDelayed(() -> {
+                android.util.Log.d("Dashboard", "Refrescando lista después de crear hábito");
+                refreshHabitsList();
+            }, 500);
 
             // Si se creó un hábito de leer desde el diálogo, abrir cámara automáticamente
             if (shouldOpenCameraAfterCreation) {
@@ -948,7 +957,11 @@ public class DashboardActivity extends AppCompatActivity {
         // Recargar hábitos cuando se vuelve de crear/editar (para casos sin resultCode
         // específico)
         if (dbHelper != null && resultCode == RESULT_OK) {
-            refreshHabitsList();
+            // CRÍTICO: Pequeño delay para asegurar que el hábito se guardó completamente
+            mainHandler.postDelayed(() -> {
+                android.util.Log.d("Dashboard", "Refrescando lista después de operación genérica");
+                refreshHabitsList();
+            }, 500);
         }
     }
 
@@ -960,13 +973,38 @@ public class DashboardActivity extends AppCompatActivity {
             habitRepository = HabitRepository.getInstance(this);
         }
 
+        // Obtener userId actual para logging
+        com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
+            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+        long currentUserId = sessionManager.getUserId();
+        android.util.Log.d("Dashboard", "🔄 Cargando hábitos del usuario " + currentUserId + " desde Repository...");
+
         habitRepository.getAllHabits(new HabitRepository.RepositoryCallback<List<Habit>>() {
             @Override
             public void onSuccess(List<Habit> habitsList) {
                 runOnUiThread(() -> {
-                    habits = habitsList;
+                    android.util.Log.d("Dashboard", "✅ Hábitos cargados desde Repository: " + habitsList.size() + " hábitos para userId: " + currentUserId);
+                    
+                    // CRÍTICO: Verificar que todos los hábitos pertenecen al usuario actual
+                    List<Habit> validHabits = new ArrayList<>();
+                    for (Habit habit : habitsList) {
+                        if (habit.getUserId() == currentUserId) {
+                            validHabits.add(habit);
+                        } else {
+                            android.util.Log.w("Dashboard", "⚠️ Hábito con userId incorrecto filtrado - HabitId: " + habit.getId() + ", UserId: " + habit.getUserId() + " (esperado: " + currentUserId + ")");
+                        }
+                    }
+                    
+                    if (validHabits.size() != habitsList.size()) {
+                        android.util.Log.w("Dashboard", "⚠️ Se filtraron " + (habitsList.size() - validHabits.size()) + " hábitos con userId incorrecto");
+                    }
+                    
+                    habits = validHabits;
                     if (adapter != null) {
-                        adapter.updateHabits(habitsList);
+                        adapter.updateHabits(validHabits);
+                        android.util.Log.d("Dashboard", "✅ Adapter actualizado con " + validHabits.size() + " hábitos válidos");
+                    } else {
+                        android.util.Log.w("Dashboard", "⚠️ Adapter es null, no se puede actualizar la lista");
                     }
                 });
             }
@@ -974,16 +1012,20 @@ public class DashboardActivity extends AppCompatActivity {
             @Override
             public void onError(String error) {
                 runOnUiThread(() -> {
-                    android.util.Log.e("Dashboard", "Error al cargar hábitos: " + error);
+                    android.util.Log.e("Dashboard", "❌ Error al cargar hábitos desde Repository: " + error);
                     // Fallback a SQLite local si falla la API
                     if (dbHelper != null) {
                         try {
+                            android.util.Log.d("Dashboard", "🔄 Fallback: Cargando hábitos desde SQLite local...");
                             habits = dbHelper.getAllHabits();
+                            android.util.Log.d("Dashboard", "✅ Hábitos cargados desde SQLite: " + habits.size() + " hábitos para userId: " + currentUserId);
+                            
                             if (adapter != null) {
                                 adapter.updateHabits(habits);
+                                android.util.Log.d("Dashboard", "✅ Adapter actualizado desde SQLite con " + habits.size() + " hábitos");
                             }
                         } catch (Exception e) {
-                            android.util.Log.e("Dashboard", "Error al cargar desde SQLite", e);
+                            android.util.Log.e("Dashboard", "❌ Error al cargar desde SQLite", e);
                         }
                     }
                 });

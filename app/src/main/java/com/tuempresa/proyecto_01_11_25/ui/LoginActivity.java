@@ -98,9 +98,12 @@ public class LoginActivity extends AppCompatActivity {
                             displayName
                         );
 
-                        // NO limpiar hábitos aquí - se hará después de sincronizar en DashboardActivity
-                        // La limpieza se hará automáticamente después de descargar los hábitos del servidor
-                        // Esto evita eliminar hábitos que aún no se han descargado
+                        // CRÍTICO: Limpiar hábitos de otros usuarios inmediatamente después del login
+                        // Esto asegura que el nuevo usuario solo vea sus propios hábitos
+                        com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                            new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(LoginActivity.this);
+                        dbHelper.deleteHabitsNotBelongingToCurrentUser();
+                        android.util.Log.d("LoginActivity", "✅ Hábitos de otros usuarios eliminados después del login para userId: " + userId);
 
                         Toast.makeText(LoginActivity.this, "Bienvenido " + displayName, Toast.LENGTH_SHORT).show();
                         Intent intent = new Intent(LoginActivity.this, DashboardActivity.class);

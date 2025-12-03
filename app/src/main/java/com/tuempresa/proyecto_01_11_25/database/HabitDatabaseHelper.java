@@ -454,6 +454,16 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
      */
     private void loadHabitExtraFields(Cursor cursor, Habit habit) {
         try {
+            // CRÍTICO: Cargar userId desde la BD
+            int userIdIndex = cursor.getColumnIndex(COLUMN_HABIT_USER_ID);
+            if (userIdIndex >= 0 && !cursor.isNull(userIdIndex)) {
+                long userId = cursor.getLong(userIdIndex);
+                habit.setUserId(userId);
+                android.util.Log.d("HabitDatabaseHelper", "✅ userId cargado desde BD: " + userId + " para hábito: " + habit.getTitle());
+            } else {
+                android.util.Log.w("HabitDatabaseHelper", "⚠️ No se encontró columna user_id en cursor para hábito: " + habit.getTitle());
+            }
+            
             // Cargar points
             int pointsIndex = cursor.getColumnIndex(COLUMN_HABIT_POINTS);
             if (pointsIndex >= 0 && !cursor.isNull(pointsIndex)) {

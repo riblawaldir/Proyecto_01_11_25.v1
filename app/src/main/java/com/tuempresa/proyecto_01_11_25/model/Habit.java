@@ -25,7 +25,7 @@ public class Habit {
     }
 
     private long id = -1;
-    @SerializedName("UserId")
+    @SerializedName(value = "userId", alternate = {"UserId", "user_id"})
     private long userId = -1; // ID del usuario (requerido por API)
     private String title;
     private String goal;

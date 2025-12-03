@@ -330,11 +330,19 @@ public class SyncManager {
                     int ignoredCount = 0;
                     Log.d(TAG, "Procesando " + serverHabits.size() + " hábitos del servidor para usuario " + currentUserId);
                     for (Habit habit : serverHabits) {
+                        // CRÍTICO: Si el userId es -1 (valor por defecto), significa que no se deserializó correctamente
+                        // Intentar corregirlo usando el userId del usuario actual
+                        if (habit.getUserId() == -1 || habit.getUserId() <= 0) {
+                            Log.w(TAG, "⚠️ Hábito con userId inválido (" + habit.getUserId() + ") después de deserialización, corrigiendo a " + currentUserId + 
+                                    ": " + habit.getTitle() + " (serverId: " + habit.getId() + ")");
+                            habit.setUserId(currentUserId);
+                        }
+                        
                         Log.d(TAG, "Hábito del servidor: " + habit.getTitle() + " (userId: " + habit.getUserId() + ", serverId: " + habit.getId() + ")");
                         // Verificar que el hábito pertenezca al usuario actual
                         // Si tiene userId: 0 pero tiene un serverId válido, aceptarlo (se corregirá el userId)
                         boolean shouldAccept = false;
-                        if (habit.getUserId() == currentUserId && habit.getUserId() != 0) {
+                        if (habit.getUserId() == currentUserId && habit.getUserId() > 0) {
                             // Hábito del usuario actual con userId válido
                             shouldAccept = true;
                         } else if (habit.getUserId() == 0 && habit.getId() > 0) {
@@ -342,6 +350,7 @@ public class SyncManager {
                             // Lo aceptamos y upsertHabitFromServer corregirá el userId
                             Log.w(TAG, "⚠️ Hábito con userId: 0 pero serverId válido, corrigiendo userId: " + habit.getTitle() + 
                                     " (serverId: " + habit.getId() + ", currentUserId: " + currentUserId + ")");
+                            habit.setUserId(currentUserId);
                             shouldAccept = true;
                         }
                         

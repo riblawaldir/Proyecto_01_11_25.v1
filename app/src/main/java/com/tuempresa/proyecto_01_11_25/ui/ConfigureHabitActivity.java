@@ -20,6 +20,7 @@ import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 import com.tuempresa.proyecto_01_11_25.utils.ReminderNotificationManager;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -33,6 +34,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
     private Habit.HabitType habitType;
     private HabitDatabaseHelper dbHelper; // Mantener para compatibilidad (lectura)
     private HabitRepository habitRepository; // Para guardar en API
+    private SessionManager sessionManager; // Para obtener userId del usuario logueado
     private LinearLayout containerConfig;
     private TextInputEditText edtHabitName;
     private MaterialButton btnSave;
@@ -47,6 +49,7 @@ public class ConfigureHabitActivity extends AppCompatActivity {
 
         dbHelper = new HabitDatabaseHelper(this);
         habitRepository = HabitRepository.getInstance(this);
+        sessionManager = new SessionManager(this);
         
         // Verificar si es edición
         habitIdToEdit = getIntent().getLongExtra("habit_id", -1);
@@ -445,8 +448,19 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         btnSave.setEnabled(false);
         btnSave.setText("Guardando...");
         
+        // Obtener userId del usuario logueado
+        long userId = sessionManager.getUserId();
+        if (userId <= 0) {
+            android.util.Log.e("ConfigureHabit", "⚠️ ERROR: No se puede crear hábito sin usuario logueado (userId: " + userId + ")");
+            btnSave.setEnabled(true);
+            btnSave.setText(getString(R.string.save_configuration));
+            Toast.makeText(this, "Error: Usuario no autenticado", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         // Crear objeto Habit
         Habit habit = new Habit();
+        habit.setUserId(userId); // CRÍTICO: Establecer userId del usuario logueado
         habit.setTitle(name);
         habit.setGoal(getGoalForType(habitType));
         habit.setCategory(getCategoryForType(habitType));
@@ -464,6 +478,8 @@ public class ConfigureHabitActivity extends AppCompatActivity {
         habit.setEnglishMode(englishMode);
         habit.setCodingMode(codingMode);
         habit.setHabitIcon(selectedIconName);
+        
+        android.util.Log.d("ConfigureHabit", "Creando hábito '" + name + "' con userId: " + userId);
 
         if (habitIdToEdit > 0) {
             // Actualizar hábito existente
@@ -509,9 +525,33 @@ public class ConfigureHabitActivity extends AppCompatActivity {
                     runOnUiThread(() -> {
                         btnSave.setEnabled(true);
                         btnSave.setText(getString(R.string.save_configuration));
-                        // Toast eliminado - usuario no quiere mensajes constantes
-                        setResult(RESULT_OK);
-                        finish();
+                        
+                        // CRÍTICO: Verificar que el hábito se guardó correctamente en la BD local
+                        // antes de cerrar la actividad
+                        android.util.Log.d("ConfigureHabit", "✅ Hábito creado con éxito. Verificando guardado en BD...");
+                        
+                        // Pequeño delay para asegurar que el hábito se guardó completamente
+                        // antes de cerrar y refrescar Dashboard
+                        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                            // Verificar que el hábito existe en la BD
+                            com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper dbHelper = 
+                                new com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper(ConfigureHabitActivity.this);
+                            
+                            try {
+                                com.tuempresa.proyecto_01_11_25.model.Habit savedHabit = dbHelper.getHabitById(createdHabit.getId());
+                                if (savedHabit != null) {
+                                    android.util.Log.d("ConfigureHabit", "✅ Hábito verificado en BD - Id: " + savedHabit.getId() + ", UserId: " + savedHabit.getUserId());
+                                } else {
+                                    android.util.Log.w("ConfigureHabit", "⚠️ Hábito no encontrado en BD después de crear. Id: " + createdHabit.getId());
+                                }
+                            } catch (Exception e) {
+                                android.util.Log.e("ConfigureHabit", "Error al verificar hábito en BD", e);
+                            }
+                            
+                            // Cerrar actividad y refrescar Dashboard
+                            setResult(RESULT_OK);
+                            finish();
+                        }, 300); // 300ms de delay para asegurar que se guardó
                     });
                 }
 
