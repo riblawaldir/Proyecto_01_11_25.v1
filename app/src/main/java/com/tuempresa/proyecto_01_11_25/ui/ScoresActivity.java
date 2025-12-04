@@ -22,6 +22,7 @@ import com.tuempresa.proyecto_01_11_25.api.HabitApiClient;
 import com.tuempresa.proyecto_01_11_25.api.UserApiService;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Friend;
+import com.tuempresa.proyecto_01_11_25.model.UserDto;
 import com.tuempresa.proyecto_01_11_25.model.UserStatsResponse;
 import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
@@ -271,27 +272,225 @@ public class ScoresActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Agregar Amigo");
 
-        final EditText input = new EditText(this);
-        input.setHint("Email del amigo");
-        input.setInputType(android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        builder.setView(input);
+        // Crear un layout para el diálogo
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_search_user, null);
+        builder.setView(dialogView);
 
-        builder.setPositiveButton("Agregar", (dialog, which) -> {
-            String email = input.getText().toString().trim();
-            if (email.isEmpty()) {
-                Toast.makeText(this, "Por favor ingresa un email", Toast.LENGTH_SHORT).show();
+        EditText input = dialogView.findViewById(R.id.etSearchInput);
+        android.widget.RadioGroup radioGroup = dialogView.findViewById(R.id.rgSearchType);
+        
+        // Configurar hint inicial
+        input.setHint("Email, nombre o ID del usuario");
+
+        // Listener para cambiar el hint según el tipo de búsqueda seleccionado
+        radioGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.rbSearchByEmail) {
+                input.setHint("Email del usuario");
+                input.setInputType(android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+            } else if (checkedId == R.id.rbSearchByName) {
+                input.setHint("Nombre del usuario");
+                input.setInputType(android.text.InputType.TYPE_TEXT_VARIATION_PERSON_NAME);
+            } else if (checkedId == R.id.rbSearchById) {
+                input.setHint("ID del usuario (número)");
+                input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            }
+        });
+
+        // Seleccionar búsqueda por email por defecto
+        radioGroup.check(R.id.rbSearchByEmail);
+
+        builder.setPositiveButton("Buscar", (dialog, which) -> {
+            String searchTerm = input.getText().toString().trim();
+            if (searchTerm.isEmpty()) {
+                Toast.makeText(this, "Por favor ingresa un término de búsqueda", Toast.LENGTH_SHORT).show();
                 return;
             }
-            addFriend(email);
+            
+            int selectedId = radioGroup.getCheckedRadioButtonId();
+            if (selectedId == R.id.rbSearchByEmail) {
+                searchAndAddFriendByEmail(searchTerm);
+            } else if (selectedId == R.id.rbSearchByName) {
+                searchAndAddFriendByName(searchTerm);
+            } else if (selectedId == R.id.rbSearchById) {
+                try {
+                    long userId = Long.parseLong(searchTerm);
+                    searchAndAddFriendById(userId);
+                } catch (NumberFormatException e) {
+                    Toast.makeText(this, "El ID debe ser un número válido", Toast.LENGTH_SHORT).show();
+                }
+            }
         });
 
         builder.setNegativeButton("Cancelar", null);
         builder.show();
     }
 
-    private void addFriend(String friendEmail) {
+    /**
+     * Busca y agrega un amigo por email
+     */
+    private void searchAndAddFriendByEmail(String email) {
+        Toast.makeText(this, "Buscando usuario por email...", Toast.LENGTH_SHORT).show();
+
+        Call<UserStatsResponse> call = userApiService.getUserByEmailWithStats(email);
+        call.enqueue(new Callback<UserStatsResponse>() {
+            @Override
+            public void onResponse(Call<UserStatsResponse> call, Response<UserStatsResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    UserStatsResponse userResponse = response.body();
+                    addFriendFromResponse(userResponse);
+                } else {
+                    if (response.code() == 404) {
+                        Toast.makeText(ScoresActivity.this, "Usuario no encontrado", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(ScoresActivity.this, "Error al buscar usuario: " + response.code(), Toast.LENGTH_SHORT).show();
+                    }
+                    Log.e(TAG, "Error al buscar usuario por email: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<UserStatsResponse> call, Throwable t) {
+                Log.e(TAG, "Error de red al buscar usuario por email", t);
+                Toast.makeText(ScoresActivity.this, "Error de conexión. Verifica tu internet.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Busca y agrega un amigo por nombre
+     */
+    private void searchAndAddFriendByName(String name) {
+        Toast.makeText(this, "Buscando usuario por nombre...", Toast.LENGTH_SHORT).show();
+
+        Call<java.util.List<UserDto>> call = userApiService.searchUsersByName(name);
+        call.enqueue(new Callback<java.util.List<UserDto>>() {
+            @Override
+            public void onResponse(Call<java.util.List<UserDto>> call, Response<java.util.List<UserDto>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    java.util.List<UserDto> users = response.body();
+                    if (users.isEmpty()) {
+                        Toast.makeText(ScoresActivity.this, "No se encontraron usuarios con ese nombre", Toast.LENGTH_SHORT).show();
+                    } else if (users.size() == 1) {
+                        // Si hay solo un resultado, agregarlo directamente
+                        UserDto user = users.get(0);
+                        fetchUserStatsAndAdd(user);
+                    } else {
+                        // Si hay múltiples resultados, mostrar diálogo para seleccionar
+                        showUserSelectionDialog(users);
+                    }
+                } else {
+                    Toast.makeText(ScoresActivity.this, "Error al buscar usuario: " + response.code(), Toast.LENGTH_SHORT).show();
+                    Log.e(TAG, "Error al buscar usuario por nombre: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<java.util.List<UserDto>> call, Throwable t) {
+                Log.e(TAG, "Error de red al buscar usuario por nombre", t);
+                Toast.makeText(ScoresActivity.this, "Error de conexión. Verifica tu internet.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Busca y agrega un amigo por ID
+     */
+    private void searchAndAddFriendById(long userId) {
+        Toast.makeText(this, "Buscando usuario por ID...", Toast.LENGTH_SHORT).show();
+
+        Call<UserDto> call = userApiService.getUserById(userId);
+        call.enqueue(new Callback<UserDto>() {
+            @Override
+            public void onResponse(Call<UserDto> call, Response<UserDto> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    UserDto user = response.body();
+                    fetchUserStatsAndAdd(user);
+                } else {
+                    if (response.code() == 404) {
+                        Toast.makeText(ScoresActivity.this, "Usuario no encontrado con ese ID", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(ScoresActivity.this, "Error al buscar usuario: " + response.code(), Toast.LENGTH_SHORT).show();
+                    }
+                    Log.e(TAG, "Error al buscar usuario por ID: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<UserDto> call, Throwable t) {
+                Log.e(TAG, "Error de red al buscar usuario por ID", t);
+                Toast.makeText(ScoresActivity.this, "Error de conexión. Verifica tu internet.", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Obtiene las estadísticas de un usuario y lo agrega como amigo
+     */
+    private void fetchUserStatsAndAdd(UserDto user) {
+        Call<UserStatsResponse.UserStats> statsCall = userApiService.getUserStats(user.getId());
+        statsCall.enqueue(new Callback<UserStatsResponse.UserStats>() {
+            @Override
+            public void onResponse(Call<UserStatsResponse.UserStats> call, Response<UserStatsResponse.UserStats> response) {
+                UserStatsResponse.UserStats stats = null;
+                if (response.isSuccessful() && response.body() != null) {
+                    stats = response.body();
+                } else {
+                    stats = new UserStatsResponse.UserStats();
+                }
+
+                // Crear UserStatsResponse con el usuario y sus estadísticas
+                UserStatsResponse userResponse = new UserStatsResponse();
+                userResponse.setUser(user);
+                userResponse.setStats(stats);
+
+                addFriendFromResponse(userResponse);
+            }
+
+            @Override
+            public void onFailure(Call<UserStatsResponse.UserStats> call, Throwable t) {
+                Log.e(TAG, "Error al obtener estadísticas del usuario", t);
+                // Agregar sin estadísticas
+                UserStatsResponse userResponse = new UserStatsResponse();
+                userResponse.setUser(user);
+                userResponse.setStats(new UserStatsResponse.UserStats());
+                addFriendFromResponse(userResponse);
+            }
+        });
+    }
+
+    /**
+     * Muestra un diálogo para seleccionar un usuario de una lista
+     */
+    private void showUserSelectionDialog(java.util.List<UserDto> users) {
+        String[] userNames = new String[users.size()];
+        for (int i = 0; i < users.size(); i++) {
+            UserDto user = users.get(i);
+            String displayName = user.getDisplayName();
+            if (displayName == null || displayName.isEmpty()) {
+                displayName = user.getEmail() != null ? user.getEmail().split("@")[0] : "Usuario " + user.getId();
+            }
+            userNames[i] = displayName + " (" + user.getEmail() + ")";
+        }
+
+        new AlertDialog.Builder(this)
+                .setTitle("Selecciona un usuario")
+                .setItems(userNames, (dialog, which) -> {
+                    UserDto selectedUser = users.get(which);
+                    fetchUserStatsAndAdd(selectedUser);
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    /**
+     * Agrega un amigo desde una respuesta de UserStatsResponse
+     */
+    private void addFriendFromResponse(UserStatsResponse userResponse) {
         long userId = sessionManager.getUserId();
-        
+        UserDto user = userResponse.getUser();
+        String friendEmail = user.getEmail();
+        long friendUserId = user.getId();
+
         // Verificar si el amigo ya existe
         if (dbHelper.friendExists(userId, friendEmail)) {
             Toast.makeText(this, "Este amigo ya está en tu lista", Toast.LENGTH_SHORT).show();
@@ -300,71 +499,48 @@ public class ScoresActivity extends AppCompatActivity {
 
         // Verificar que no se agregue a sí mismo
         String currentUserEmail = sessionManager.getUserEmail();
-        if (friendEmail.equalsIgnoreCase(currentUserEmail)) {
+        if (friendEmail != null && friendEmail.equalsIgnoreCase(currentUserEmail)) {
             Toast.makeText(this, "No puedes agregarte a ti mismo", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // Mostrar indicador de carga
-        Toast.makeText(this, "Buscando usuario...", Toast.LENGTH_SHORT).show();
+        // Verificar que no se agregue a sí mismo por ID
+        if (friendUserId == userId) {
+            Toast.makeText(this, "No puedes agregarte a ti mismo", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        // Buscar usuario en la API
-        Call<UserStatsResponse> call = userApiService.getUserByEmailWithStats(friendEmail);
-        call.enqueue(new Callback<UserStatsResponse>() {
-            @Override
-            public void onResponse(Call<UserStatsResponse> call, Response<UserStatsResponse> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    UserStatsResponse userResponse = response.body();
-                    UserStatsResponse.UserStats stats = userResponse.getStats();
-                    
-                    if (stats == null) {
-                        stats = new UserStatsResponse.UserStats();
-                    }
+        UserStatsResponse.UserStats stats = userResponse.getStats();
+        if (stats == null) {
+            stats = new UserStatsResponse.UserStats();
+        }
 
-                    // Guardar amigo en la base de datos local
-                    long friendUserId = userResponse.getUser().getId();
-                    String displayName = userResponse.getUser().getDisplayName();
-                    if (displayName == null || displayName.isEmpty()) {
-                        displayName = friendEmail.split("@")[0];
-                    }
+        String displayName = user.getDisplayName();
+        if (displayName == null || displayName.isEmpty()) {
+            displayName = friendEmail != null ? friendEmail.split("@")[0] : "Usuario " + friendUserId;
+        }
 
-                    long friendId = dbHelper.addFriend(
-                        userId,
-                        friendUserId,
-                        friendEmail,
-                        displayName
-                    );
+        long friendId = dbHelper.addFriend(
+            userId,
+            friendUserId,
+            friendEmail,
+            displayName
+        );
 
-                    if (friendId > 0) {
-                        // Actualizar estadísticas del amigo
-                        dbHelper.updateFriendStats(
-                            friendId,
-                            stats.getTotalHabits(),
-                            stats.getTotalPoints(),
-                            stats.getCurrentStreak()
-                        );
+        if (friendId > 0) {
+            // Actualizar estadísticas del amigo
+            dbHelper.updateFriendStats(
+                friendId,
+                stats.getTotalHabits(),
+                stats.getTotalPoints(),
+                stats.getCurrentStreak()
+            );
 
-                        Toast.makeText(ScoresActivity.this, "Amigo agregado correctamente", Toast.LENGTH_SHORT).show();
-                        loadFriends();
-                    } else {
-                        Toast.makeText(ScoresActivity.this, "Error al guardar amigo", Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    if (response.code() == 404) {
-                        Toast.makeText(ScoresActivity.this, "Usuario no encontrado", Toast.LENGTH_SHORT).show();
-                    } else {
-                        Toast.makeText(ScoresActivity.this, "Error al buscar usuario: " + response.code(), Toast.LENGTH_SHORT).show();
-                    }
-                    Log.e(TAG, "Error al buscar usuario: " + response.code() + " - " + response.message());
-                }
-            }
-
-            @Override
-            public void onFailure(Call<UserStatsResponse> call, Throwable t) {
-                Log.e(TAG, "Error de red al buscar usuario", t);
-                Toast.makeText(ScoresActivity.this, "Error de conexión. Verifica tu internet.", Toast.LENGTH_SHORT).show();
-            }
-        });
+            Toast.makeText(this, "Amigo agregado correctamente", Toast.LENGTH_SHORT).show();
+            loadFriends();
+        } else {
+            Toast.makeText(this, "Error al guardar amigo", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private static class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.VH> {

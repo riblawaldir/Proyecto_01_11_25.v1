@@ -17,7 +17,7 @@ public class ProfileActivity extends AppCompatActivity {
 
     private SessionManager session;
     private HabitDatabaseHelper dbHelper;
-    private TextView tvUserName, tvUserEmail, tvUserPhone;
+    private TextView tvUserName, tvUserEmail, tvUserPhone, tvUserId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,6 +31,7 @@ public class ProfileActivity extends AppCompatActivity {
         tvUserName = findViewById(R.id.tvUserName);
         tvUserEmail = findViewById(R.id.tvUserEmail);
         tvUserPhone = findViewById(R.id.tvUserPhone);
+        tvUserId = findViewById(R.id.tvUserId);
         MaterialButton btnLogout = findViewById(R.id.btnLogout);
         BottomNavigationView bottomNav = findViewById(R.id.bottomNavigation);
 
@@ -68,6 +69,15 @@ public class ProfileActivity extends AppCompatActivity {
 
     private void loadUserData() {
         String email = session.getUserEmail();
+        long userId = session.getUserId();
+        
+        // Mostrar ID del usuario (siempre disponible desde la sesión)
+        if (userId > 0) {
+            tvUserId.setText("ID: " + userId);
+        } else {
+            tvUserId.setText("ID: --");
+        }
+        
         if (email != null) {
             User user = dbHelper.getUserByEmail(email);
             if (user != null) {
@@ -76,6 +86,11 @@ public class ProfileActivity extends AppCompatActivity {
                 tvUserName.setText(fullName.trim().isEmpty() ? "Usuario" : fullName.trim());
                 tvUserEmail.setText(user.getEmail());
                 tvUserPhone.setText(user.getPhone() != null ? user.getPhone() : "Sin teléfono");
+                
+                // Si el usuario tiene un userId en la BD y es diferente, actualizar el ID mostrado
+                if (user.getUserId() > 0 && user.getUserId() != userId) {
+                    tvUserId.setText("ID: " + user.getUserId());
+                }
             } else {
                 tvUserName.setText("Usuario");
                 tvUserEmail.setText(email);
