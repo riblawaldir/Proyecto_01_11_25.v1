@@ -13,7 +13,7 @@
         android:layout_height="120dp"
         android:layout_marginBottom="32dp"
         android:src="@drawable/img_logo"
-        android:contentDescription="Logo" />
+        android:contentDescription="@string/app_logo" />
 
     <TextView
         android:layout_width="wrap_content"

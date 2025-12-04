@@ -26,10 +26,7 @@ import com.tuempresa.proyecto_01_11_25.model.UserDto;
 import com.tuempresa.proyecto_01_11_25.model.UserStatsResponse;
 import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 import retrofit2.Call;
 import retrofit2.Callback;

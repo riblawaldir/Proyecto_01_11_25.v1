@@ -10,18 +10,9 @@
         android:layout_width="200dp"
         android:layout_height="200dp"
         android:src="@drawable/img_logo"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"
-        android:layout_margin="-50dp"
-        android:layout_marginStart="106dp"
+        android:layout_centerHorizontal="true"
         android:layout_marginTop="103dp"
-        android:layout_marginEnd="105dp"
-        android:layout_marginBottom="-50dp"
-        android:background="#1AFFFFFF"
-        android:backgroundTint="#FFFFFF"
-        android:backgroundTintMode="src_in"
-        android:shape="oval" />
+        android:contentDescription="@string/app_logo" />
 
     <LinearLayout
         android:layout_width="wrap_content"
