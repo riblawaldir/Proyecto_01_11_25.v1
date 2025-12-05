@@ -695,7 +695,7 @@ public class  HabitRepository {
                                                         habit.isOneClickComplete(),
                                                         habit.isEnglishMode(),
                                                         habit.isCodingMode(),
-                                                        habit.getHabitIcon()
+                                                        habit .getHabitIcon()
                                                     );
                                                     if (newLocalHabitId > 0) {
                                                         // Marcar como sincronizado
