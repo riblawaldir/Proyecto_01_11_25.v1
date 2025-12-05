@@ -5,9 +5,12 @@ import android.util.Log;
 
 import com.google.gson.Gson;
 import com.tuempresa.proyecto_01_11_25.api.HabitApiHelper;
+import com.tuempresa.proyecto_01_11_25.api.HabitCheckinApiHelper;
 import com.tuempresa.proyecto_01_11_25.api.ScoreApiHelper;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelperSync;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
+import com.tuempresa.proyecto_01_11_25.model.HabitCheckinDto;
+import com.tuempresa.proyecto_01_11_25.model.HabitCompletion;
 import com.tuempresa.proyecto_01_11_25.model.Score;
 import com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor;
 import com.tuempresa.proyecto_01_11_25.sync.SyncManager;
@@ -29,6 +32,7 @@ public class  HabitRepository {
     private final HabitDatabaseHelperSync dbHelper;
     private final HabitApiHelper apiHelper;
     private final ScoreApiHelper scoreApiHelper;
+    private final HabitCheckinApiHelper checkinApiHelper;
     private final ConnectionMonitor connectionMonitor;
     private final SyncManager syncManager;
     private final ExecutorService executorService;
@@ -45,6 +49,7 @@ public class  HabitRepository {
         this.dbHelper = new HabitDatabaseHelperSync(context);
         this.apiHelper = new HabitApiHelper(context);
         this.scoreApiHelper = new ScoreApiHelper(context);
+        this.checkinApiHelper = new HabitCheckinApiHelper(context);
         this.connectionMonitor = ConnectionMonitor.getInstance(context);
         this.syncManager = SyncManager.getInstance(context);
         this.executorService = Executors.newSingleThreadExecutor();
@@ -476,6 +481,294 @@ public class  HabitRepository {
             } catch (Exception e) {
                 Log.e(TAG, "Error al guardar score", e);
                 callback.onError(e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Guarda un completado de hábito con ubicación GPS.
+     * Guarda localmente primero, luego sincroniza con la API si hay conexión.
+     * @param habitId ID del hábito (local)
+     * @param latitude Latitud GPS
+     * @param longitude Longitud GPS
+     * @param note Nota opcional
+     * @param callback Callback para manejar la respuesta
+     */
+    public void saveHabitCompletion(long habitId, double latitude, double longitude, String note, RepositoryCallback<Void> callback) {
+        executorService.execute(() -> {
+            try {
+                long userId = sessionManager.getUserId();
+                if (userId <= 0) {
+                    callback.onError("Usuario no autenticado");
+                    return;
+                }
+
+                // Obtener información del hábito
+                Habit habit = dbHelper.getHabitById(habitId);
+                if (habit == null) {
+                    callback.onError("Hábito no encontrado");
+                    return;
+                }
+
+                // Obtener serverId del hábito
+                Long serverHabitId = dbHelper.getServerId(habitId);
+                if (serverHabitId == null || serverHabitId <= 0) {
+                    // Si no tiene serverId, guardar solo localmente
+                    boolean saved = dbHelper.saveHabitCompletion(habitId, userId, latitude, longitude);
+                    if (saved) {
+                        callback.onSuccess(null);
+                    } else {
+                        callback.onError("Error al guardar completado localmente");
+                    }
+                    return;
+                }
+
+                // 1. Guardar en base de datos local (SQLite)
+                boolean saved = dbHelper.saveHabitCompletion(habitId, userId, latitude, longitude);
+                if (!saved) {
+                    callback.onError("Error al guardar completado localmente");
+                    return;
+                }
+
+                // Notificar éxito inmediatamente
+                callback.onSuccess(null);
+
+                // 2. Si hay conexión, sincronizar con servidor
+                if (connectionMonitor.isConnected()) {
+                    HabitCheckinDto checkin = new HabitCheckinDto();
+                    checkin.setHabitId(serverHabitId);
+                    // NO enviar userId - el backend lo obtiene del token JWT
+                    checkin.setLatitude(latitude);
+                    checkin.setLongitude(longitude);
+                    checkin.setNote(note != null ? note : habit.getTitle() + " completado");
+                    checkin.setPointsAwarded(habit.getPoints()); // Enviar puntos del hábito
+
+                    checkinApiHelper.createCheckin(checkin, new HabitCheckinApiHelper.OnCheckinSavedListener() {
+                        @Override
+                        public void onSuccess(HabitCheckinDto createdCheckin) {
+                            Log.d(TAG, "Completado sincronizado con servidor: " + createdCheckin.getId());
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Error al sincronizar completado con servidor: " + error);
+                            // Guardar como operación pendiente
+                            String checkinJson = gson.toJson(checkin);
+                            dbHelper.savePendingOperation("CREATE", "CHECKIN", habitId, checkinJson);
+                        }
+                    });
+                } else {
+                    // Guardar como operación pendiente si no hay conexión
+                    HabitCheckinDto checkin = new HabitCheckinDto();
+                    checkin.setHabitId(serverHabitId);
+                    // NO enviar userId - el backend lo obtiene del token JWT
+                    checkin.setLatitude(latitude);
+                    checkin.setLongitude(longitude);
+                    checkin.setNote(note != null ? note : habit.getTitle() + " completado");
+                    checkin.setPointsAwarded(habit.getPoints()); // Enviar puntos del hábito
+                    String checkinJson = gson.toJson(checkin);
+                    dbHelper.savePendingOperation("CREATE", "CHECKIN", habitId, checkinJson);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error al guardar completado", e);
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Elimina el completado de HOY para un hábito específico.
+     * Elimina localmente primero, luego sincroniza con la API si hay conexión.
+     * @param habitId ID del hábito (local)
+     * @param callback Callback para manejar la respuesta
+     */
+    public void deleteHabitCompletion(long habitId, RepositoryCallback<Void> callback) {
+        executorService.execute(() -> {
+            try {
+                long userId = sessionManager.getUserId();
+                if (userId <= 0) {
+                    callback.onError("Usuario no autenticado");
+                    return;
+                }
+
+                // Obtener serverId del hábito
+                Long serverHabitId = dbHelper.getServerId(habitId);
+
+                // 1. Eliminar de base de datos local
+                dbHelper.deleteCompletion(habitId, userId);
+
+                // Notificar éxito inmediatamente
+                callback.onSuccess(null);
+
+                // 2. Si hay conexión y tiene serverId, eliminar del servidor
+                if (connectionMonitor.isConnected() && serverHabitId != null && serverHabitId > 0) {
+                    checkinApiHelper.deleteTodayCheckin(serverHabitId, new HabitCheckinApiHelper.OnCheckinDeletedListener() {
+                        @Override
+                        public void onSuccess() {
+                            Log.d(TAG, "Completado eliminado del servidor");
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Error al eliminar completado del servidor: " + error);
+                            // Guardar como operación pendiente
+                            HabitCheckinDto checkin = new HabitCheckinDto();
+                            checkin.setHabitId(serverHabitId);
+                            String checkinJson = gson.toJson(checkin);
+                            dbHelper.savePendingOperation("DELETE", "CHECKIN", habitId, checkinJson);
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error al eliminar completado", e);
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Obtiene todos los completados de HOY para el usuario actual.
+     * Primero obtiene de local, luego sincroniza con el servidor si hay conexión.
+     * @param callback Callback para manejar la respuesta
+     */
+    public void getTodayCompletions(RepositoryCallback<List<HabitCompletion>> callback) {
+        executorService.execute(() -> {
+            try {
+                long userId = sessionManager.getUserId();
+                if (userId <= 0) {
+                    // Notificar error en el hilo principal
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                        callback.onError("Usuario no autenticado");
+                    });
+                    return;
+                }
+
+                // 1. Obtener de base de datos local inmediatamente
+                List<HabitCompletion> completions = dbHelper.getTodayCompletions(userId);
+
+                // Notificar inmediatamente con datos locales (en el hilo principal)
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    callback.onSuccess(completions);
+                });
+
+                // 2. Si hay conexión, sincronizar con servidor en segundo plano
+                if (connectionMonitor.isConnected()) {
+                    checkinApiHelper.getTodayCheckins(new HabitCheckinApiHelper.OnCheckinsReceivedListener() {
+                        @Override
+                        public void onSuccess(List<HabitCheckinDto> serverCheckins) {
+                            executorService.execute(() -> {
+                                Log.d(TAG, "✅ Completados de hoy cargados del servidor: " + serverCheckins.size());
+                                
+                                // Convertir DTOs del servidor a HabitCompletion y guardar en local
+                                for (HabitCheckinDto dto : serverCheckins) {
+                                    // Buscar el habitId local correspondiente al serverHabitId
+                                    Long localHabitId = dbHelper.getLocalHabitIdByServerId(dto.getHabitId());
+                                    
+                                    if (localHabitId == null || localHabitId <= 0) {
+                                        // El hábito no existe localmente, intentar sincronizarlo primero
+                                        Log.w(TAG, "⚠️ Hábito con serverId " + dto.getHabitId() + " no encontrado localmente. Intentando sincronizar hábitos...");
+                                        
+                                        // Intentar obtener el hábito del servidor
+                                        apiHelper.getHabitById(dto.getHabitId(), new HabitApiHelper.OnHabitLoadedListener() {
+                                            @Override
+                                            public void onSuccess(Habit habit) {
+                                                executorService.execute(() -> {
+                                                    // Guardar el hábito localmente usando insertHabitFull
+                                                    long newLocalHabitId = dbHelper.insertHabitFull(
+                                                        habit.getTitle(),
+                                                        habit.getGoal(),
+                                                        habit.getCategory(),
+                                                        habit.getType().name(),
+                                                        habit.getPoints(),
+                                                        habit.getTargetValue(),
+                                                        habit.getTargetUnit(),
+                                                        habit.getPagesPerDay(),
+                                                        habit.getReminderTimes(),
+                                                        habit.getDurationMinutes(),
+                                                        habit.isDndMode(),
+                                                        habit.getMusicId(),
+                                                        habit.isJournalEnabled(),
+                                                        habit.getGymDays(),
+                                                        habit.getWaterGoalGlasses(),
+                                                        habit.getWalkGoalMeters(),
+                                                        habit.getWalkGoalSteps(),
+                                                        habit.isOneClickComplete(),
+                                                        habit.isEnglishMode(),
+                                                        habit.isCodingMode(),
+                                                        habit.getHabitIcon()
+                                                    );
+                                                    if (newLocalHabitId > 0) {
+                                                        // Marcar como sincronizado
+                                                        dbHelper.markHabitAsSynced(newLocalHabitId, dto.getHabitId());
+                                                        
+                                                        // Ahora guardar el completado
+                                                        if (!dbHelper.hasCompletionToday(newLocalHabitId, userId)) {
+                                                            dbHelper.saveHabitCompletion(
+                                                                newLocalHabitId,
+                                                                userId,
+                                                                dto.getLatitude() != null ? dto.getLatitude() : 0.0,
+                                                                dto.getLongitude() != null ? dto.getLongitude() : 0.0
+                                                            );
+                                                            Log.d(TAG, "✅ Completado guardado después de sincronizar hábito: " + habit.getTitle());
+                                                        }
+                                                    }
+                                                });
+                                            }
+
+                                            @Override
+                                            public void onError(String error) {
+                                                Log.e(TAG, "❌ Error al obtener hábito del servidor (serverId=" + dto.getHabitId() + "): " + error);
+                                                // Continuar con el siguiente checkin
+                                            }
+                                        });
+                                    } else {
+                                        // El hábito existe localmente, guardar el completado si no existe
+                                        if (!dbHelper.hasCompletionToday(localHabitId, userId)) {
+                                            // Obtener información del hábito local
+                                            Habit habit = dbHelper.getHabitById(localHabitId);
+                                            if (habit != null) {
+                                                dbHelper.saveHabitCompletion(
+                                                    localHabitId,
+                                                    userId,
+                                                    dto.getLatitude() != null ? dto.getLatitude() : 0.0,
+                                                    dto.getLongitude() != null ? dto.getLongitude() : 0.0
+                                                );
+                                                Log.d(TAG, "✅ Completado guardado: " + habit.getTitle());
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Esperar un poco para que se completen las sincronizaciones de hábitos
+                                try {
+                                    Thread.sleep(500); // 500ms para dar tiempo a las llamadas asíncronas
+                                } catch (InterruptedException e) {
+                                    Thread.currentThread().interrupt();
+                                }
+
+                                // Obtener lista actualizada
+                                List<HabitCompletion> updatedCompletions = dbHelper.getTodayCompletions(userId);
+                                
+                                // Notificar en el hilo principal para actualizar UI
+                                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                                    callback.onSuccess(updatedCompletions);
+                                });
+                            });
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Error al obtener completados del servidor: " + error);
+                            // No notificar error, ya tenemos datos locales
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error al obtener completados", e);
+                // Notificar error en el hilo principal
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    callback.onError(e.getMessage());
+                });
             }
         });
     }

@@ -13,9 +13,15 @@ import androidx.core.content.ContextCompat;
 
 import com.google.android.material.button.MaterialButton;
 import com.tuempresa.proyecto_01_11_25.R;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.sensors.StepSensorManager;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -26,6 +32,8 @@ public class WalkDetailActivity extends AppCompatActivity {
     private Habit habit;
     private HabitDatabaseHelper dbHelper;
     private SharedPreferences progressPrefs;
+    private SessionManager sessionManager;
+    private FusedLocationProviderClient fused;
     private TextView txtProgress;
     private TextView txtGoal;
     private TextView txtStats;
@@ -48,6 +56,8 @@ public class WalkDetailActivity extends AppCompatActivity {
 
         dbHelper = new HabitDatabaseHelper(this);
         habit = dbHelper.getHabitById(habitId);
+        sessionManager = new SessionManager(this);
+        fused = LocationServices.getFusedLocationProviderClient(this);
 
         if (habit == null || habit.getType() != Habit.HabitType.WALK) {
             finish();
@@ -158,6 +168,27 @@ public class WalkDetailActivity extends AppCompatActivity {
         habit.setCompleted(true);
         dbHelper.updateHabitCompleted(habit.getTitle(), true);
         
+        // Guardar completado con ubicación GPS
+        long currentUserId = sessionManager.getUserId();
+        if (currentUserId > 0) {
+            if (hasFineLocationPermission()) {
+                fused.getLastLocation().addOnSuccessListener(location -> {
+                    if (location != null) {
+                        dbHelper.saveHabitCompletion(
+                            habit.getId(),
+                            currentUserId,
+                            location.getLatitude(),
+                            location.getLongitude()
+                        );
+                    } else {
+                        dbHelper.saveHabitCompletion(habit.getId(), currentUserId, 0.0, 0.0);
+                    }
+                });
+            } else {
+                dbHelper.saveHabitCompletion(habit.getId(), currentUserId, 0.0, 0.0);
+            }
+        }
+        
         // Actualizar hábito en API
         com.tuempresa.proyecto_01_11_25.repository.HabitRepository habitRepository = 
             com.tuempresa.proyecto_01_11_25.repository.HabitRepository.getInstance(this);
@@ -187,6 +218,11 @@ public class WalkDetailActivity extends AppCompatActivity {
         if (stepSensorManager != null) {
             stepSensorManager.stop();
         }
+    }
+    
+    private boolean hasFineLocationPermission() {
+        return ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 }
 

@@ -18,9 +18,8 @@ import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.Priority;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
-import com.tuempresa.proyecto_01_11_25.model.HabitEvent;
-import com.tuempresa.proyecto_01_11_25.model.HabitEventStore;
 import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
 
 public class StepSensorManager {
 
@@ -188,13 +187,6 @@ public class StepSensorManager {
 
                     if (!done && accMeters >= targetMeters) {
                         done = true;
-                        // Guardar ubicación del evento
-                        HabitEventStore.add(new HabitEvent(
-                                loc.getLatitude(),
-                                loc.getLongitude(),
-                                "Caminar completado (" + (int)accMeters + " m) 🚶",
-                                HabitEvent.HabitType.WALK
-                        ));
                         completeWalk();
                         break;
                     }
@@ -255,21 +247,27 @@ public class StepSensorManager {
                     habit.setCompleted(true);
                     dbHelper.updateHabitCompleted(habit.getTitle(), true);
                     
-                    // Guardar evento de ubicación si tenemos GPS
-                    if (last != null && !useSteps) {
-                        HabitEventStore.add(new HabitEvent(
+                    // Guardar completado con ubicación GPS
+                    SessionManager sessionManager = new SessionManager(ctx);
+                    long currentUserId = sessionManager.getUserId();
+                    if (currentUserId > 0) {
+                        if (last != null && !useSteps) {
+                            // Guardar con ubicación GPS
+                            dbHelper.saveHabitCompletion(
+                                habit.getId(),
+                                currentUserId,
                                 last.getLatitude(),
-                                last.getLongitude(),
-                                "Caminar completado (" + (int)accMeters + " m) 🚶",
-                                HabitEvent.HabitType.WALK
-                        ));
-                    } else if (useSteps) {
-                        // Si usamos pasos, guardar evento sin ubicación específica
-                        HabitEventStore.add(new HabitEvent(
-                                0, 0,
-                                "Caminar completado (" + accSteps + " pasos) 🚶",
-                                HabitEvent.HabitType.WALK
-                        ));
+                                last.getLongitude()
+                            );
+                        } else {
+                            // Guardar sin ubicación (pasos o sin GPS)
+                            dbHelper.saveHabitCompletion(
+                                habit.getId(),
+                                currentUserId,
+                                0.0,
+                                0.0
+                            );
+                        }
                     }
                     
                     // Actualizar hábito en API

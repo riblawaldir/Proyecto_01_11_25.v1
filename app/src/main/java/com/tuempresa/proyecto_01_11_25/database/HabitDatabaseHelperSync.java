@@ -540,6 +540,24 @@ public class HabitDatabaseHelperSync extends HabitDatabaseHelper {
     }
 
     /**
+     * Obtiene el localId de un hábito por su serverId
+     */
+    public Long getLocalHabitIdByServerId(long serverId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        ensureSyncColumns(db);
+        Cursor cursor = db.query(TABLE_HABITS, new String[]{COLUMN_HABIT_ID}, 
+                COLUMN_HABIT_SERVER_ID + "=?", new String[]{String.valueOf(serverId)}, null, null, null);
+        
+        Long localId = null;
+        if (cursor.moveToFirst()) {
+            localId = cursor.getLong(0);
+        }
+        cursor.close();
+        db.close();
+        return localId;
+    }
+
+    /**
      * Verifica si un hábito está sincronizado
      */
     public boolean isHabitSynced(long id) {

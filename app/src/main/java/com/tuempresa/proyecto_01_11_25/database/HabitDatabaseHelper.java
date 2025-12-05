@@ -15,7 +15,7 @@ import java.util.List;
 public class HabitDatabaseHelper extends SQLiteOpenHelper {
 
     private static final String DATABASE_NAME = "habitus.db";
-    private static final int DATABASE_VERSION = 13;
+    private static final int DATABASE_VERSION = 14;
     private final Context context;
 
     // Tabla de hábitos (protected para que HabitDatabaseHelperSync pueda acceder)
@@ -103,6 +103,16 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
     protected static final String COLUMN_FRIEND_TOTAL_POINTS = "total_points";
     protected static final String COLUMN_FRIEND_CURRENT_STREAK = "current_streak";
     protected static final String COLUMN_FRIEND_ADDED_AT = "added_at";
+
+    // Tabla de completados de hábitos (para el mapa)
+    protected static final String TABLE_HABIT_COMPLETIONS = "habit_completions";
+    protected static final String COLUMN_COMPLETION_ID = "id";
+    protected static final String COLUMN_COMPLETION_HABIT_ID = "habit_id";
+    protected static final String COLUMN_COMPLETION_USER_ID = "user_id";
+    protected static final String COLUMN_COMPLETION_DATE = "completion_date";
+    protected static final String COLUMN_COMPLETION_LAT = "latitude";
+    protected static final String COLUMN_COMPLETION_LNG = "longitude";
+    protected static final String COLUMN_COMPLETION_CREATED_AT = "created_at";
 
     public HabitDatabaseHelper(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -261,6 +271,49 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 "UNIQUE(" + COLUMN_FRIEND_USER_ID + ", " + COLUMN_FRIEND_EMAIL + ")" +
                 ")";
         db.execSQL(createFriendsTable);
+
+        // Crear tabla de completados de hábitos (para el mapa)
+        String createCompletionsTable = "CREATE TABLE " + TABLE_HABIT_COMPLETIONS + " (" +
+                COLUMN_COMPLETION_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                COLUMN_COMPLETION_HABIT_ID + " INTEGER NOT NULL, " +
+                COLUMN_COMPLETION_USER_ID + " INTEGER NOT NULL, " +
+                COLUMN_COMPLETION_DATE + " TEXT NOT NULL, " +
+                COLUMN_COMPLETION_LAT + " REAL DEFAULT 0.0, " +
+                COLUMN_COMPLETION_LNG + " REAL DEFAULT 0.0, " +
+                COLUMN_COMPLETION_CREATED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                "FOREIGN KEY(" + COLUMN_COMPLETION_HABIT_ID + ") REFERENCES " + TABLE_HABITS + "(" + COLUMN_HABIT_ID + ") ON DELETE CASCADE, " +
+                "FOREIGN KEY(" + COLUMN_COMPLETION_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + "), " +
+                "UNIQUE(" + COLUMN_COMPLETION_HABIT_ID + ", " + COLUMN_COMPLETION_USER_ID + ", " + COLUMN_COMPLETION_DATE + ")" +
+                ")";
+        db.execSQL(createCompletionsTable);
+
+        // Crear índices para optimización
+        db.execSQL("CREATE INDEX idx_completions_user_date ON " + TABLE_HABIT_COMPLETIONS +
+                "(" + COLUMN_COMPLETION_USER_ID + ", " + COLUMN_COMPLETION_DATE + ")");
+        db.execSQL("CREATE INDEX idx_completions_habit ON " + TABLE_HABIT_COMPLETIONS +
+                "(" + COLUMN_COMPLETION_HABIT_ID + ")");
+
+        // Crear triggers para limpieza automática
+        // Trigger: Eliminar completado cuando se desmarca un hábito
+        db.execSQL("CREATE TRIGGER delete_completion_on_uncomplete " +
+                "AFTER UPDATE OF " + COLUMN_HABIT_COMPLETED + " ON " + TABLE_HABITS + " " +
+                "FOR EACH ROW " +
+                "WHEN NEW." + COLUMN_HABIT_COMPLETED + " = 0 AND OLD." + COLUMN_HABIT_COMPLETED + " = 1 " +
+                "BEGIN " +
+                "  DELETE FROM " + TABLE_HABIT_COMPLETIONS + " " +
+                "  WHERE " + COLUMN_COMPLETION_HABIT_ID + " = NEW." + COLUMN_HABIT_ID + " " +
+                "  AND " + COLUMN_COMPLETION_USER_ID + " = NEW." + COLUMN_HABIT_USER_ID + " " +
+                "  AND " + COLUMN_COMPLETION_DATE + " = date('now'); " +
+                "END;");
+
+        // Trigger: Eliminar completados cuando se borra un hábito
+        db.execSQL("CREATE TRIGGER delete_completions_on_habit_delete " +
+                "AFTER DELETE ON " + TABLE_HABITS + " " +
+                "FOR EACH ROW " +
+                "BEGIN " +
+                "  DELETE FROM " + TABLE_HABIT_COMPLETIONS + " " +
+                "  WHERE " + COLUMN_COMPLETION_HABIT_ID + " = OLD." + COLUMN_HABIT_ID + "; " +
+                "END;");
     }
 
     @Override
@@ -428,6 +481,51 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_STREAK_DATE, "INTEGER DEFAULT 0");
         addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_DAILY_HABITS_COMPLETED, "INTEGER DEFAULT 0");
         addColumnIfNotExists(db, TABLE_USERS, COLUMN_USER_LAST_ACTIVITY_DATE, "INTEGER DEFAULT 0");
+
+        if (oldVersion < 14) {
+            // Migración a versión 14: Crear tabla de completados de hábitos
+            String createCompletionsTable = "CREATE TABLE IF NOT EXISTS " + TABLE_HABIT_COMPLETIONS + " (" +
+                    COLUMN_COMPLETION_ID + " INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                    COLUMN_COMPLETION_HABIT_ID + " INTEGER NOT NULL, " +
+                    COLUMN_COMPLETION_USER_ID + " INTEGER NOT NULL, " +
+                    COLUMN_COMPLETION_DATE + " TEXT NOT NULL, " +
+                    COLUMN_COMPLETION_LAT + " REAL DEFAULT 0.0, " +
+                    COLUMN_COMPLETION_LNG + " REAL DEFAULT 0.0, " +
+                    COLUMN_COMPLETION_CREATED_AT + " INTEGER DEFAULT (strftime('%s', 'now')), " +
+                    "FOREIGN KEY(" + COLUMN_COMPLETION_HABIT_ID + ") REFERENCES " + TABLE_HABITS + "(" + COLUMN_HABIT_ID + ") ON DELETE CASCADE, " +
+                    "FOREIGN KEY(" + COLUMN_COMPLETION_USER_ID + ") REFERENCES " + TABLE_USERS + "(" + COLUMN_USER_ID + "), " +
+                    "UNIQUE(" + COLUMN_COMPLETION_HABIT_ID + ", " + COLUMN_COMPLETION_USER_ID + ", " + COLUMN_COMPLETION_DATE + ")" +
+                    ")";
+            db.execSQL(createCompletionsTable);
+
+            // Crear índices
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_completions_user_date ON " + TABLE_HABIT_COMPLETIONS +
+                    "(" + COLUMN_COMPLETION_USER_ID + ", " + COLUMN_COMPLETION_DATE + ")");
+            db.execSQL("CREATE INDEX IF NOT EXISTS idx_completions_habit ON " + TABLE_HABIT_COMPLETIONS +
+                    "(" + COLUMN_COMPLETION_HABIT_ID + ")");
+
+            // Crear triggers
+            db.execSQL("DROP TRIGGER IF EXISTS delete_completion_on_uncomplete");
+            db.execSQL("CREATE TRIGGER delete_completion_on_uncomplete " +
+                    "AFTER UPDATE OF " + COLUMN_HABIT_COMPLETED + " ON " + TABLE_HABITS + " " +
+                    "FOR EACH ROW " +
+                    "WHEN NEW." + COLUMN_HABIT_COMPLETED + " = 0 AND OLD." + COLUMN_HABIT_COMPLETED + " = 1 " +
+                    "BEGIN " +
+                    "  DELETE FROM " + TABLE_HABIT_COMPLETIONS + " " +
+                    "  WHERE " + COLUMN_COMPLETION_HABIT_ID + " = NEW." + COLUMN_HABIT_ID + " " +
+                    "  AND " + COLUMN_COMPLETION_USER_ID + " = NEW." + COLUMN_HABIT_USER_ID + " " +
+                    "  AND " + COLUMN_COMPLETION_DATE + " = date('now'); " +
+                    "END;");
+
+            db.execSQL("DROP TRIGGER IF EXISTS delete_completions_on_habit_delete");
+            db.execSQL("CREATE TRIGGER delete_completions_on_habit_delete " +
+                    "AFTER DELETE ON " + TABLE_HABITS + " " +
+                    "FOR EACH ROW " +
+                    "BEGIN " +
+                    "  DELETE FROM " + TABLE_HABIT_COMPLETIONS + " " +
+                    "  WHERE " + COLUMN_COMPLETION_HABIT_ID + " = OLD." + COLUMN_HABIT_ID + "; " +
+                    "END;");
+        }
     }
 
     protected void addColumnIfNotExists(SQLiteDatabase db, String table, String column, String type) {
@@ -1446,11 +1544,12 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
      * Resetea todos los hábitos completados al inicio del día
      * Esto permite que los usuarios completen sus hábitos nuevamente cada día
      * Solo resetea si es un nuevo día (después de las 00:00)
+     * @return true si se hizo reset, false si no fue necesario
      */
-    public void resetDailyCompletedHabits() {
+    public boolean resetDailyCompletedHabits() {
         long currentUserId = getCurrentUserId();
         if (currentUserId <= 0) {
-            return;
+            return false;
         }
         
         // Verificar si es un nuevo día
@@ -1476,7 +1575,7 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         
         if (!shouldReset) {
             android.util.Log.d("HabitDatabaseHelper", "ℹ️ No es necesario resetear hábitos (mismo día)");
-            return;
+            return false;
         }
         
         // Resetear hábitos completados
@@ -1493,6 +1592,11 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
         if (rowsUpdated > 0) {
             android.util.Log.d("HabitDatabaseHelper", "✅ " + rowsUpdated + " hábitos reseteados para el nuevo día (usuario " + currentUserId + ")");
         }
+        
+        // Limpiar completados de días anteriores
+        cleanOldCompletions(currentUserId);
+        
+        return true; // Retornar true para indicar que se hizo reset
     }
 
     /**
@@ -2068,6 +2172,196 @@ public class HabitDatabaseHelper extends SQLiteOpenHelper {
                 COLUMN_FRIEND_USER_ID + "=? AND " + COLUMN_FRIEND_EMAIL + "=?",
                 new String[]{String.valueOf(userId), friendEmail},
                 null, null, null);
+        boolean exists = cursor.getCount() > 0;
+        cursor.close();
+        db.close();
+        return exists;
+    }
+
+    // ========== GESTIÓN DE COMPLETADOS DE HÁBITOS (PARA MAPA) ==========
+    
+    /**
+     * Guarda un completado de hábito con ubicación GPS
+     * @param habitId ID del hábito
+     * @param userId ID del usuario
+     * @param lat Latitud (0.0 si no hay GPS)
+     * @param lng Longitud (0.0 si no hay GPS)
+     * @return true si se guardó exitosamente, false si ya existía
+     */
+    public boolean saveHabitCompletion(long habitId, long userId, double lat, double lng) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        
+        // Obtener fecha actual en formato 'YYYY-MM-DD'
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        String today = sdf.format(new java.util.Date());
+        
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_COMPLETION_HABIT_ID, habitId);
+        values.put(COLUMN_COMPLETION_USER_ID, userId);
+        values.put(COLUMN_COMPLETION_DATE, today);
+        values.put(COLUMN_COMPLETION_LAT, lat);
+        values.put(COLUMN_COMPLETION_LNG, lng);
+        values.put(COLUMN_COMPLETION_CREATED_AT, System.currentTimeMillis() / 1000);
+        
+        try {
+            long result = db.insertWithOnConflict(TABLE_HABIT_COMPLETIONS, null, values, 
+                    SQLiteDatabase.CONFLICT_IGNORE);
+            db.close();
+            
+            if (result != -1) {
+                android.util.Log.d("HabitDatabaseHelper", "✅ Completado guardado: habitId=" + habitId + 
+                        ", userId=" + userId + ", fecha=" + today);
+                return true;
+            } else {
+                android.util.Log.d("HabitDatabaseHelper", "ℹ️ Completado ya existía (duplicado ignorado): habitId=" + 
+                        habitId + ", userId=" + userId + ", fecha=" + today);
+                return false;
+            }
+        } catch (Exception e) {
+            android.util.Log.e("HabitDatabaseHelper", "Error al guardar completado", e);
+            db.close();
+            return false;
+        }
+    }
+    
+    /**
+     * Obtiene todos los completados de HOY para un usuario
+     * @param userId ID del usuario
+     * @return Lista de completados con información del hábito
+     */
+    public java.util.List<com.tuempresa.proyecto_01_11_25.model.HabitCompletion> getTodayCompletions(long userId) {
+        java.util.List<com.tuempresa.proyecto_01_11_25.model.HabitCompletion> completions = new java.util.ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        
+        // Obtener fecha actual
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        String today = sdf.format(new java.util.Date());
+        
+        // Query con JOIN para obtener información del hábito
+        String query = "SELECT c.*, h." + COLUMN_HABIT_TITLE + ", h." + COLUMN_HABIT_TYPE + ", h." + COLUMN_HABIT_ICON +
+                " FROM " + TABLE_HABIT_COMPLETIONS + " c " +
+                " INNER JOIN " + TABLE_HABITS + " h ON c." + COLUMN_COMPLETION_HABIT_ID + " = h." + COLUMN_HABIT_ID +
+                " WHERE c." + COLUMN_COMPLETION_USER_ID + " = ? " +
+                " AND c." + COLUMN_COMPLETION_DATE + " = ? " +
+                " ORDER BY c." + COLUMN_COMPLETION_CREATED_AT + " DESC";
+        
+        Cursor cursor = db.rawQuery(query, new String[]{String.valueOf(userId), today});
+        
+        if (cursor.moveToFirst()) {
+            do {
+                com.tuempresa.proyecto_01_11_25.model.HabitCompletion completion = 
+                        new com.tuempresa.proyecto_01_11_25.model.HabitCompletion();
+                completion.setId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_ID)));
+                completion.setHabitId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_HABIT_ID)));
+                completion.setUserId(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_USER_ID)));
+                completion.setCompletionDate(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_DATE)));
+                completion.setLatitude(cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_LAT)));
+                completion.setLongitude(cursor.getDouble(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_LNG)));
+                completion.setCreatedAt(cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_COMPLETION_CREATED_AT)) * 1000);
+                
+                // Información del hábito
+                completion.setHabitTitle(cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HABIT_TITLE)));
+                String typeStr = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_HABIT_TYPE));
+                try {
+                    completion.setHabitType(Habit.HabitType.valueOf(typeStr));
+                } catch (Exception e) {
+                    completion.setHabitType(Habit.HabitType.DEMO);
+                }
+                
+                int iconIndex = cursor.getColumnIndex(COLUMN_HABIT_ICON);
+                if (iconIndex >= 0 && !cursor.isNull(iconIndex)) {
+                    completion.setHabitIcon(cursor.getString(iconIndex));
+                }
+                
+                completions.add(completion);
+            } while (cursor.moveToNext());
+        }
+        
+        cursor.close();
+        db.close();
+        
+        android.util.Log.d("HabitDatabaseHelper", "📊 Completados de hoy para usuario " + userId + ": " + completions.size());
+        return completions;
+    }
+    
+    /**
+     * Elimina el completado de HOY para un hábito específico
+     * @param habitId ID del hábito
+     * @param userId ID del usuario
+     */
+    public void deleteCompletion(long habitId, long userId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        String today = sdf.format(new java.util.Date());
+        
+        int deleted = db.delete(TABLE_HABIT_COMPLETIONS,
+                COLUMN_COMPLETION_HABIT_ID + " = ? AND " +
+                COLUMN_COMPLETION_USER_ID + " = ? AND " +
+                COLUMN_COMPLETION_DATE + " = ?",
+                new String[]{String.valueOf(habitId), String.valueOf(userId), today});
+        
+        db.close();
+        
+        if (deleted > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "✅ Completado eliminado: habitId=" + habitId + ", userId=" + userId);
+        }
+    }
+    
+    /**
+     * Elimina todos los completados de un hábito (cuando se borra el hábito)
+     * @param habitId ID del hábito
+     */
+    public void deleteCompletionsForHabit(long habitId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        int deleted = db.delete(TABLE_HABIT_COMPLETIONS,
+                COLUMN_COMPLETION_HABIT_ID + " = ?",
+                new String[]{String.valueOf(habitId)});
+        db.close();
+        
+        if (deleted > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "✅ " + deleted + " completados eliminados para habitId=" + habitId);
+        }
+    }
+    
+    /**
+     * Limpia completados de días anteriores (mantiene solo hoy)
+     * @param userId ID del usuario
+     */
+    public void cleanOldCompletions(long userId) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        String today = sdf.format(new java.util.Date());
+        
+        int deleted = db.delete(TABLE_HABIT_COMPLETIONS,
+                COLUMN_COMPLETION_USER_ID + " = ? AND " + COLUMN_COMPLETION_DATE + " < ?",
+                new String[]{String.valueOf(userId), today});
+        
+        db.close();
+        
+        if (deleted > 0) {
+            android.util.Log.d("HabitDatabaseHelper", "🧹 " + deleted + " completados antiguos eliminados para usuario " + userId);
+        }
+    }
+    
+    /**
+     * Verifica si ya existe un completado hoy para un hábito
+     * @param habitId ID del hábito
+     * @param userId ID del usuario
+     * @return true si ya existe
+     */
+    public boolean hasCompletionToday(long habitId, long userId) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault());
+        String today = sdf.format(new java.util.Date());
+        
+        Cursor cursor = db.query(TABLE_HABIT_COMPLETIONS,
+                new String[]{COLUMN_COMPLETION_ID},
+                COLUMN_COMPLETION_HABIT_ID + " = ? AND " +
+                COLUMN_COMPLETION_USER_ID + " = ? AND " +
+                COLUMN_COMPLETION_DATE + " = ?",
+                new String[]{String.valueOf(habitId), String.valueOf(userId), today},
+                null, null, null);
+        
         boolean exists = cursor.getCount() > 0;
         cursor.close();
         db.close();

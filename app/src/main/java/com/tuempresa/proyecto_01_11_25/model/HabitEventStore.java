@@ -108,9 +108,10 @@ public class HabitEventStore {
                 double lng = jsonEvent.getDouble("lng");
                 String note = jsonEvent.getString("note");
                 HabitEvent.HabitType type = HabitEvent.HabitType.valueOf(jsonEvent.getString("type"));
+                long timestamp = jsonEvent.optLong("timestamp", System.currentTimeMillis());
                 
-                // Crear evento (el constructor ya asigna timestamp, pero guardamos el original)
-                HabitEvent event = new HabitEvent(lat, lng, note, type);
+                // Crear evento con el timestamp guardado
+                HabitEvent event = new HabitEvent(lat, lng, note, type, timestamp);
                 events.add(event);
             }
             

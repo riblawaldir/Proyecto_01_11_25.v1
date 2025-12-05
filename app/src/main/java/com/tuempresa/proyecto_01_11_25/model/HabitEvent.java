@@ -10,11 +10,15 @@ public class HabitEvent {
     private final long timestamp;
 
     public HabitEvent(double lat, double lng, String note, HabitType type) {
+        this(lat, lng, note, type, System.currentTimeMillis());
+    }
+
+    public HabitEvent(double lat, double lng, String note, HabitType type, long timestamp) {
         this.lat = lat;
         this.lng = lng;
         this.note = note;
         this.type = type;
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = timestamp;
     }
 
     public double getLat() { return lat; }

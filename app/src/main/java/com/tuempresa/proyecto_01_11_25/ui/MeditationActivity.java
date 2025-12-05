@@ -12,9 +12,15 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import com.tuempresa.proyecto_01_11_25.R;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationServices;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
 import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
+import com.tuempresa.proyecto_01_11_25.utils.SessionManager;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -26,6 +32,8 @@ public class MeditationActivity extends AppCompatActivity {
     private HabitDatabaseHelper dbHelper;
     private HabitRepository habitRepository;
     private TextView txtTimer;
+    private SessionManager sessionManager;
+    private FusedLocationProviderClient fused;
     private MaterialButton btnStart, btnPause, btnReset;
     private CountDownTimer timer;
     private long timeLeftInMillis = 0;
@@ -46,6 +54,8 @@ public class MeditationActivity extends AppCompatActivity {
         dbHelper = new HabitDatabaseHelper(this);
         habitRepository = HabitRepository.getInstance(this);
         habit = dbHelper.getHabitById(habitId);
+        sessionManager = new SessionManager(this);
+        fused = LocationServices.getFusedLocationProviderClient(this);
         
         if (habit == null) {
             finish();
@@ -130,6 +140,27 @@ public class MeditationActivity extends AppCompatActivity {
         habit.setCompleted(true);
         dbHelper.updateHabitCompleted(habit.getTitle(), true);
         
+        // Guardar completado con ubicación GPS
+        long currentUserId = sessionManager.getUserId();
+        if (currentUserId > 0) {
+            if (hasFineLocationPermission()) {
+                fused.getLastLocation().addOnSuccessListener(location -> {
+                    if (location != null) {
+                        dbHelper.saveHabitCompletion(
+                            habit.getId(),
+                            currentUserId,
+                            location.getLatitude(),
+                            location.getLongitude()
+                        );
+                    } else {
+                        dbHelper.saveHabitCompletion(habit.getId(), currentUserId, 0.0, 0.0);
+                    }
+                });
+            } else {
+                dbHelper.saveHabitCompletion(habit.getId(), currentUserId, 0.0, 0.0);
+            }
+        }
+        
         // Actualizar hábito en API
         habitRepository.updateHabit(habit, new HabitRepository.RepositoryCallback<Habit>() {
             @Override
@@ -175,6 +206,11 @@ public class MeditationActivity extends AppCompatActivity {
         if (timer != null) {
             timer.cancel();
         }
+    }
+    
+    private boolean hasFineLocationPermission() {
+        return ContextCompat.checkSelfPermission(this,
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 }
 

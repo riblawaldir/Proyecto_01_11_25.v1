@@ -73,6 +73,7 @@ public class HabitApiClient {
     private ScoreApiService scoreApiService;
     private AuthApiService authApiService;
     private UserApiService userApiService;
+    private HabitCheckinApiService habitCheckinApiService;
     private Retrofit retrofit;
     private Context context;
 
@@ -173,6 +174,7 @@ public class HabitApiClient {
         scoreApiService = retrofit.create(ScoreApiService.class);
         authApiService = retrofit.create(AuthApiService.class);
         userApiService = retrofit.create(UserApiService.class);
+        habitCheckinApiService = retrofit.create(HabitCheckinApiService.class);
     }
 
     /**
@@ -230,6 +232,14 @@ public class HabitApiClient {
      */
     public UserApiService getUserApiService() {
         return userApiService;
+    }
+
+    /**
+     * Obtiene el servicio de HabitCheckin API configurado.
+     * @return HabitCheckinApiService para realizar llamadas de checkins
+     */
+    public HabitCheckinApiService getHabitCheckinApiService() {
+        return habitCheckinApiService;
     }
 
     /**

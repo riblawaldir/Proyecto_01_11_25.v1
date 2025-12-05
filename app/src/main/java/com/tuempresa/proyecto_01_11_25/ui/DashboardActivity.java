@@ -24,8 +24,6 @@ import com.tuempresa.proyecto_01_11_25.R;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelper;
 import com.tuempresa.proyecto_01_11_25.database.HabitDatabaseHelperSync;
 import com.tuempresa.proyecto_01_11_25.model.Habit;
-import com.tuempresa.proyecto_01_11_25.model.HabitEvent;
-import com.tuempresa.proyecto_01_11_25.model.HabitEventStore;
 import com.tuempresa.proyecto_01_11_25.network.ConnectionMonitor;
 import com.tuempresa.proyecto_01_11_25.repository.HabitRepository;
 import com.tuempresa.proyecto_01_11_25.sensors.AccelerometerSensorManager;
@@ -66,6 +64,7 @@ public class DashboardActivity extends AppCompatActivity {
     private List<Habit> habits;
     private FusedLocationProviderClient fused;
     private Handler mainHandler;
+    private com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager;
     private SharedPreferences prefs;
     private HabitDatabaseHelper dbHelper; // Mantener para compatibilidad
     private HabitRepository habitRepository; // Para consumo de API
@@ -184,8 +183,7 @@ public class DashboardActivity extends AppCompatActivity {
 
         // CRÍTICO: Verificar usuario logueado y limpiar hábitos de otros usuarios
         // Esto asegura que solo se muestren los hábitos del usuario actual
-        com.tuempresa.proyecto_01_11_25.utils.SessionManager sessionManager = 
-            new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
+        sessionManager = new com.tuempresa.proyecto_01_11_25.utils.SessionManager(this);
         
         if (sessionManager.isLoggedIn()) {
             long currentUserId = sessionManager.getUserId();
@@ -208,7 +206,17 @@ public class DashboardActivity extends AppCompatActivity {
             
             // CRÍTICO: Resetear hábitos completados al inicio del día
             // Esto permite que los usuarios completen sus hábitos nuevamente cada día
-            dbHelper.resetDailyCompletedHabits();
+            boolean wasReset = dbHelper.resetDailyCompletedHabits();
+            
+            // CRÍTICO: Si se reseteó, limpiar la lista de hábitos en memoria para forzar recarga
+            // Esto asegura que los objetos Habit se sincronicen con la BD después del reset
+            if (wasReset && habits != null) {
+                android.util.Log.d("Dashboard", "🔄 Reset detectado, limpiando hábitos en memoria para sincronizar con BD");
+                habits.clear();
+                if (adapter != null) {
+                    adapter.updateHabits(new ArrayList<>());
+                }
+            }
         } else {
             android.util.Log.w("Dashboard", "⚠️ No hay usuario logueado. Redirigiendo a LoginActivity.");
             // Si no hay sesión, redirigir a LoginActivity
@@ -217,14 +225,12 @@ public class DashboardActivity extends AppCompatActivity {
             return;
         }
 
-        // Inicializar HabitEventStore para cargar eventos guardados
-        HabitEventStore.init(this);
-
         // Inicializar Repository para consumo de API
         habitRepository = HabitRepository.getInstance(this);
 
         // Cargar hábitos usando Repository (SQLite + API)
         // Esto cargará solo los hábitos del usuario actual (filtrado por userId)
+        // IMPORTANTE: Después del reset, los hábitos se recargan desde la BD con el estado correcto
         loadHabitsFromRepository();
 
         rv = findViewById(R.id.rvHabits);
@@ -757,7 +763,7 @@ public class DashboardActivity extends AppCompatActivity {
             // Toast eliminado - usuario no quiere mensajes constantes
 
             // Registrar evento en mapa
-            addLocationEvent("Modo Foco 🧘 Activado", HabitEvent.HabitType.FOCUS);
+            // Modo foco activado (ya no se guarda en mapa, solo es un cambio de UI)
         }
 
         safeRecreate();
@@ -1275,13 +1281,71 @@ public class DashboardActivity extends AppCompatActivity {
                 // Guardar estado inmediatamente
                 saveHabitsState();
 
-                // Guardar evento en el mapa (excepto WALK que ya lo guarda StepSensorManager,
-                // READ lo guarda CameraActivity)
-                if (type == Habit.HabitType.EXERCISE) {
-                    addLocationEvent("Ejercicio ✅ Completado", HabitEvent.HabitType.EXERCISE);
+                // Guardar completado con ubicación GPS para el mapa (sincroniza con backend)
+                long currentUserId = sessionManager.getUserId();
+                if (currentUserId > 0) {
+                    if (hasFineLocationPermission()) {
+                        fused.getLastLocation().addOnSuccessListener(location -> {
+                            if (location != null) {
+                                habitRepository.saveHabitCompletion(
+                                    habit.getId(),
+                                    location.getLatitude(),
+                                    location.getLongitude(),
+                                    habit.getTitle() + " completado",
+                                    new HabitRepository.RepositoryCallback<Void>() {
+                                        @Override
+                                        public void onSuccess(Void data) {
+                                            android.util.Log.d("Dashboard", "Completado guardado y sincronizado");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                        }
+                                    }
+                                );
+                            } else {
+                                // Guardar sin ubicación
+                                habitRepository.saveHabitCompletion(
+                                    habit.getId(),
+                                    0.0,
+                                    0.0,
+                                    habit.getTitle() + " completado",
+                                    new HabitRepository.RepositoryCallback<Void>() {
+                                        @Override
+                                        public void onSuccess(Void data) {
+                                            android.util.Log.d("Dashboard", "Completado guardado sin ubicación");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                        }
+                                    }
+                                );
+                            }
+                        });
+                    } else {
+                        // Guardar sin ubicación
+                        habitRepository.saveHabitCompletion(
+                            habit.getId(),
+                            0.0,
+                            0.0,
+                            habit.getTitle() + " completado",
+                            new HabitRepository.RepositoryCallback<Void>() {
+                                @Override
+                                public void onSuccess(Void data) {
+                                    android.util.Log.d("Dashboard", "Completado guardado sin ubicación");
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                }
+                            }
+                        );
+                    }
                 }
-                // Nota: WALK ya guarda su evento en StepSensorManager, READ lo guarda
-                // CameraActivity, DEMO lo guarda en completeDemoHabit
 
                 // Actualizar UI
                 int position = habits.indexOf(habit);
@@ -1306,6 +1370,13 @@ public class DashboardActivity extends AppCompatActivity {
             // Si ya está completado, desmarcarlo (toggle)
             h.setCompleted(false);
             dbHelper.updateHabitCompleted(h.getTitle(), false);
+            
+            // Eliminar completado del mapa
+            long currentUserId = sessionManager.getUserId();
+            if (currentUserId > 0) {
+                dbHelper.deleteCompletion(h.getId(), currentUserId);
+            }
+            
             saveHabitsState();
             int position = habits.indexOf(h);
             if (position >= 0) {
@@ -1319,6 +1390,54 @@ public class DashboardActivity extends AppCompatActivity {
         // Completar el hábito
         h.setCompleted(true);
         dbHelper.updateHabitCompleted(h.getTitle(), true);
+        
+        // Guardar completado con ubicación GPS (sincroniza con backend)
+        long currentUserId = sessionManager.getUserId();
+        if (currentUserId > 0) {
+            if (hasFineLocationPermission()) {
+                fused.getLastLocation().addOnSuccessListener(location -> {
+                    if (location != null) {
+                        habitRepository.saveHabitCompletion(
+                            h.getId(),
+                            location.getLatitude(),
+                            location.getLongitude(),
+                            h.getTitle() + " completado",
+                            new HabitRepository.RepositoryCallback<Void>() {
+                                @Override
+                                public void onSuccess(Void data) {
+                                    android.util.Log.d("Dashboard", "Completado guardado y sincronizado");
+                                }
+
+                                @Override
+                                public void onError(String error) {
+                                    android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                }
+                            }
+                        );
+                    } else {
+                        habitRepository.saveHabitCompletion(h.getId(), 0.0, 0.0, h.getTitle() + " completado",
+                            new HabitRepository.RepositoryCallback<Void>() {
+                                @Override
+                                public void onSuccess(Void data) {}
+                                @Override
+                                public void onError(String error) {
+                                    android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                }
+                            });
+                    }
+                });
+            } else {
+                habitRepository.saveHabitCompletion(h.getId(), 0.0, 0.0, h.getTitle() + " completado",
+                    new HabitRepository.RepositoryCallback<Void>() {
+                        @Override
+                        public void onSuccess(Void data) {}
+                        @Override
+                        public void onError(String error) {
+                            android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                        }
+                    });
+            }
+        }
 
         // Actualizar hábito en API
         habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
@@ -1370,7 +1489,6 @@ public class DashboardActivity extends AppCompatActivity {
                 });
         
         saveHabitsState();
-        addLocationEvent(h.getTitle() + " ✅ Completado", HabitEvent.HabitType.DEMO);
     }
 
     /** Maneja el click en un hábito según su tipo */
@@ -1379,6 +1497,13 @@ public class DashboardActivity extends AppCompatActivity {
         if (h.isCompleted() && h.getType() == Habit.HabitType.DEMO) {
             h.setCompleted(false);
             dbHelper.updateHabitCompleted(h.getTitle(), false);
+            
+            // Eliminar completado del mapa
+            long currentUserId = sessionManager.getUserId();
+            if (currentUserId > 0) {
+                dbHelper.deleteCompletion(h.getId(), currentUserId);
+            }
+            
             saveHabitsState();
             int position = habits.indexOf(h);
             if (position >= 0) {
@@ -1413,6 +1538,54 @@ public class DashboardActivity extends AppCompatActivity {
                 // Completar manualmente (tipos que permiten completado rápido)
                 h.setCompleted(true);
                 dbHelper.updateHabitCompleted(h.getTitle(), true);
+                
+                // Guardar completado con ubicación GPS (sincroniza con backend)
+                long currentUserId = sessionManager.getUserId();
+                if (currentUserId > 0) {
+                    if (hasFineLocationPermission()) {
+                        fused.getLastLocation().addOnSuccessListener(location -> {
+                            if (location != null) {
+                                habitRepository.saveHabitCompletion(
+                                    h.getId(),
+                                    location.getLatitude(),
+                                    location.getLongitude(),
+                                    h.getTitle() + " completado",
+                                    new HabitRepository.RepositoryCallback<Void>() {
+                                        @Override
+                                        public void onSuccess(Void data) {
+                                            android.util.Log.d("Dashboard", "Completado guardado y sincronizado");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                        }
+                                    }
+                                );
+                            } else {
+                                habitRepository.saveHabitCompletion(h.getId(), 0.0, 0.0, h.getTitle() + " completado",
+                                    new HabitRepository.RepositoryCallback<Void>() {
+                                        @Override
+                                        public void onSuccess(Void data) {}
+                                        @Override
+                                        public void onError(String error) {
+                                            android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                        }
+                                    });
+                            }
+                        });
+                    } else {
+                        habitRepository.saveHabitCompletion(h.getId(), 0.0, 0.0, h.getTitle() + " completado",
+                            new HabitRepository.RepositoryCallback<Void>() {
+                                @Override
+                                public void onSuccess(Void data) {}
+                                @Override
+                                public void onError(String error) {
+                                    android.util.Log.e("Dashboard", "Error al guardar completado: " + error);
+                                }
+                            });
+                    }
+                }
 
                 // Actualizar hábito en API
                 habitRepository.updateHabit(h, new HabitRepository.RepositoryCallback<Habit>() {
@@ -1442,7 +1615,6 @@ public class DashboardActivity extends AppCompatActivity {
                             }
                         });
                 saveHabitsState();
-                addLocationEvent(h.getTitle() + " ✅ Completado", HabitEvent.HabitType.DEMO);
                 int position = habits.indexOf(h);
                 if (position >= 0) {
                     adapter.notifyItemChanged(position);
@@ -1491,6 +1663,9 @@ public class DashboardActivity extends AppCompatActivity {
                     }
 
                     if (habitId > 0) {
+                        // Eliminar completados asociados
+                        dbHelper.deleteCompletionsForHabit(habitId);
+                        
                         habitRepository.deleteHabit(habitId, new HabitRepository.RepositoryCallback<Void>() {
                             @Override
                             public void onSuccess(Void data) {
@@ -1525,24 +1700,4 @@ public class DashboardActivity extends AppCompatActivity {
                 android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED;
     }
 
-    @android.annotation.SuppressLint("MissingPermission")
-    private void addLocationEvent(String message, HabitEvent.HabitType type) {
-        if (!hasFineLocationPermission()) {
-            android.util.Log.d("Dashboard", "Sin permiso de ubicación, se omite evento: " + message);
-            return;
-        }
-        try {
-            fused.getLastLocation().addOnSuccessListener(loc -> {
-                if (loc != null) {
-                    HabitEventStore.add(new HabitEvent(
-                            loc.getLatitude(),
-                            loc.getLongitude(),
-                            message,
-                            type));
-                }
-            });
-        } catch (SecurityException se) {
-            android.util.Log.w("Dashboard", "Permiso de ubicación rechazado en tiempo de ejecución", se);
-        }
-    }
 }

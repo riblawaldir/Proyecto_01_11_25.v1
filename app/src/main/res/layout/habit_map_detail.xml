@@ -23,18 +23,17 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp"/>
 
-        <ImageView
-            android:id="@+id/imgHabitIcon"
-            android:layout_width="72dp"
-            android:layout_height="72dp"
-            android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="16dp"
-            android:background="@drawable/drawable_gradient_orange"
-            android:backgroundTint="#20FF8A00"
-            android:padding="16dp"
-            android:src="@drawable/ic_fitness_center_24"
-            app:tint="@color/orangeEnd"
-            android:contentDescription="@string/icon_selection" />
+            <ImageView
+                android:id="@+id/imgHabitIcon"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/drawable_gradient_orange"
+                android:padding="16dp"
+                android:src="@drawable/ic_fitness_center_24"
+                app:tint="@color/orangeEnd"
+                android:contentDescription="@string/icon_selection" />
 
         <TextView
             android:id="@+id/txtHabitName"
